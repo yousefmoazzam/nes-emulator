@@ -1,6 +1,7 @@
 struct CPU {
     status: u8,
     register_a: u8,
+    register_x: u8,
     program_counter: u8,
 }
 
@@ -9,6 +10,7 @@ impl CPU {
         CPU {
             status: 0b0010_0000, // bit 5 is always set to 1
             register_a: 0x00,
+            register_x: 0x00,
             program_counter: 0x00,
         }
     }
@@ -28,6 +30,7 @@ impl CPU {
                     self.lda_immediate(program[self.program_counter as usize]);
                     self.program_counter += 1;
                 }
+                0xAA => self.tax(),
                 _ => todo!(),
             }
         }
@@ -50,6 +53,11 @@ impl CPU {
         } else {
             self.status &= 0b0111_1111;
         }
+    }
+
+    /// `TAX` instruction
+    fn tax(&mut self) {
+        self.register_x = self.register_a;
     }
 }
 
@@ -98,5 +106,16 @@ mod tests {
         let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
         cpu.interpret(program);
         assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn tax_sets_correct_value() {
+        let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let value_to_load = 0x05;
+        let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
+        cpu.interpret(program);
+        assert_eq!(cpu.register_x, value_to_load);
     }
 }
