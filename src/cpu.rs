@@ -7,7 +7,7 @@ struct CPU {
 impl CPU {
     pub fn new() -> Self {
         CPU {
-            status: 0b0010_0000,
+            status: 0b0010_0000, // bit 5 is always set to 1
             register_a: 0x00,
             program_counter: 0x00,
         }
