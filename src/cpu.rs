@@ -36,6 +36,13 @@ impl CPU {
     /// Immediate addressing mode for `LDA` instruction
     fn lda_immediate(&mut self, value: u8) {
         self.register_a = value;
+
+        // Set zero flag appropriately
+        if value == 0 {
+            self.status |= 0b0000_0010;
+        } else {
+            self.status &= 0b1111_1101;
+        }
     }
 }
 
@@ -58,7 +65,20 @@ mod tests {
         let lda_immediate_addressing_opcode = 0xA9;
         let value_to_load = 0x05 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
+        let expected_status = 0b0011_0000; // bit 5 + break flag
         cpu.interpret(program);
         assert_eq!(cpu.register_a, value_to_load);
+        assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn lda_immediate_addressing_set_zero_flag() {
+        let mut cpu = CPU::new();
+        let lda_immediate_addressing_opcode = 0xA9;
+        let value_to_load = 0x00 as u8;
+        let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
+        let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
     }
 }
