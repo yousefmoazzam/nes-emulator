@@ -43,6 +43,13 @@ impl CPU {
         } else {
             self.status &= 0b1111_1101;
         }
+
+        // set negative flag appropriately
+        if value & 0b1000_0000 != 0 {
+            self.status |= 0b1000_0000;
+        } else {
+            self.status &= 0b0111_1111;
+        }
     }
 }
 
@@ -78,6 +85,17 @@ mod tests {
         let value_to_load = 0x00 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
         let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn lda_immediate_addressing_set_negative_flag() {
+        let mut cpu = CPU::new();
+        let lda_immediate_addressing_opcode = 0xA9;
+        let value_to_load = 0b1000_0000; // -128 in two's complement representation
+        let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
+        let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
         cpu.interpret(program);
         assert_eq!(cpu.status, expected_status);
     }
