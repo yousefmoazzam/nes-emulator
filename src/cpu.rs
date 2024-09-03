@@ -63,6 +63,12 @@ impl CPU {
             self.status &= 0b1111_1101;
         }
 
+        if self.register_a & 0b1000_0000 != 0 {
+            self.status |= 0b1000_0000;
+        } else {
+            self.status &= 0b0111_1111;
+        }
+
         self.register_x = self.register_a;
     }
 }
@@ -145,6 +151,31 @@ mod tests {
         cpu.status = 0b0010_0010; // bit 5 + zero flag
                                   // Assume that a previous operation has set the zero flag, in
                                   // order to be able to detect if the zero flag is cleared
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn tax_set_negative_flag() {
+        let mut cpu = CPU::new();
+        let tax_opcode = 0xAA;
+        let program = vec![tax_opcode, 0x00];
+        let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
+        cpu.register_a = 0b1000_0000; // -128 in two's-complement representation
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn tax_clear_negative_flag() {
+        let mut cpu = CPU::new();
+        let tax_opcode = 0xAA;
+        let program = vec![tax_opcode, 0x00];
+        let expected_status = 0b0011_0000; // bit 5 + break flag
+        cpu.register_a = 1;
+        cpu.status = 0b1010_0000; // Assume that a previous operation has set the negative
+                                  // flag, in order to be able to detect if the negative
+                                  // flag is cleared
         cpu.interpret(program);
         assert_eq!(cpu.status, expected_status);
     }
