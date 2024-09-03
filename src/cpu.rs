@@ -57,6 +57,12 @@ impl CPU {
 
     /// `TAX` instruction
     fn tax(&mut self) {
+        if self.register_a == 0 {
+            self.status |= 0b0000_0010;
+        } else {
+            self.status &= 0b1111_1101;
+        }
+
         self.register_x = self.register_a;
     }
 }
@@ -117,5 +123,29 @@ mod tests {
         let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
         cpu.interpret(program);
         assert_eq!(cpu.register_x, value_to_load);
+    }
+
+    #[test]
+    fn tax_set_zero_flag() {
+        let mut cpu = CPU::new();
+        let tax_opcode = 0xAA;
+        let program = vec![tax_opcode, 0x00];
+        let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn tax_clear_zero_flag() {
+        let mut cpu = CPU::new();
+        let tax_opcode = 0xAA;
+        let program = vec![tax_opcode, 0x00];
+        let expected_status = 0b0011_0000; // bit 5 + break flag
+        cpu.register_a = 1; // set register A to a non-zero value
+        cpu.status = 0b0010_0010; // bit 5 + zero flag
+                                  // Assume that a previous operation has set the zero flag, in
+                                  // order to be able to detect if the zero flag is cleared
+        cpu.interpret(program);
+        assert_eq!(cpu.status, expected_status);
     }
 }
