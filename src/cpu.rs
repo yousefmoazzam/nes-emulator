@@ -36,10 +36,7 @@ impl CPU {
         }
     }
 
-    /// Immediate addressing mode for `LDA` instruction
-    fn lda_immediate(&mut self, value: u8) {
-        self.register_a = value;
-
+    fn update_negative_and_zero_flags(&mut self, value: u8) {
         // Set zero flag appropriately
         if value == 0 {
             self.status |= 0b0000_0010;
@@ -47,7 +44,7 @@ impl CPU {
             self.status &= 0b1111_1101;
         }
 
-        // set negative flag appropriately
+        // Set negative flag appropriately
         if value & 0b1000_0000 != 0 {
             self.status |= 0b1000_0000;
         } else {
@@ -55,20 +52,15 @@ impl CPU {
         }
     }
 
+    /// Immediate addressing mode for `LDA` instruction
+    fn lda_immediate(&mut self, value: u8) {
+        self.register_a = value;
+        self.update_negative_and_zero_flags(value);
+    }
+
     /// `TAX` instruction
     fn tax(&mut self) {
-        if self.register_a == 0 {
-            self.status |= 0b0000_0010;
-        } else {
-            self.status &= 0b1111_1101;
-        }
-
-        if self.register_a & 0b1000_0000 != 0 {
-            self.status |= 0b1000_0000;
-        } else {
-            self.status &= 0b0111_1111;
-        }
-
+        self.update_negative_and_zero_flags(self.register_a);
         self.register_x = self.register_a;
     }
 }
