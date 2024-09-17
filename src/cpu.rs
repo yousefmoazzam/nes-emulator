@@ -31,6 +31,7 @@ impl CPU {
                     self.program_counter += 1;
                 }
                 0xAA => self.tax(),
+                0xE8 => self.inx(),
                 _ => todo!(),
             }
         }
@@ -62,6 +63,17 @@ impl CPU {
     fn tax(&mut self) {
         self.update_negative_and_zero_flags(self.register_a);
         self.register_x = self.register_a;
+    }
+
+    /// `INX` instruction
+    fn inx(&mut self) {
+        // Cast value represented by bits stored in `self.register_x` to `i8`, to be able to
+        // increment the signed integer representation using rust's `+=` operator, rather than
+        // doing the bit fiddling ourselves
+        let mut signed_int = self.register_x as i8;
+        signed_int += 1;
+        self.register_x = signed_int as u8;
+        self.update_negative_and_zero_flags(self.register_x);
     }
 }
 
@@ -170,5 +182,101 @@ mod tests {
                                   // flag is cleared
         cpu.interpret(program);
         assert_eq!(cpu.status, expected_status);
+    }
+
+    #[test]
+    fn inx_increments_value_correctly() {
+        let mut cpu = CPU::new();
+        let inx_opcode = 0xE8;
+        let program = vec![inx_opcode, 0x00];
+        cpu.interpret(program);
+        assert_eq!(cpu.register_x, 0x01);
+    }
+
+    #[test]
+    fn inx_sets_zero_flag() {
+        let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let inx_opcode = 0xE8;
+        let negative_one = 0b1111_1111; // -1 in two's-complement representation
+
+        // Program does the following:
+        // - load the value representing -1 into register A
+        // - transfer -1 store in register A to register X
+        // - increment the -1 stored in register X to 0 (zero flag should then be set)
+        // - break
+        let program = vec![lda_opcode, negative_one, tax_opcode, inx_opcode, 0x00];
+        cpu.interpret(program);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, true);
+    }
+
+    #[test]
+    fn inx_clears_zero_flag() {
+        let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let inx_opcode = 0xE8;
+        let negative_one = 0b1111_1111; // -1 in two's-complement representation
+
+        // Program does the following:
+        // - load the value representing -1 into register A
+        // - transfer -1 store in register A to register X
+        // - increment the -1 stored in register X to 0 (zero flag should then be set)
+        // - increment the 0 stored in register X to 1 (zero flag should then be clear)
+        // - break
+        let program = vec![
+            lda_opcode,
+            negative_one,
+            tax_opcode,
+            inx_opcode,
+            inx_opcode,
+            0x00,
+        ];
+        cpu.interpret(program);
+        let is_zero_flag_set = cpu.status & 0b0000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, false);
+    }
+
+    #[test]
+    fn inx_sets_negative_flag() {
+        let mut cpu = CPU::new();
+        let inx_opcode = 0xE8;
+        let negative_value = 0b1000_0000; // -128 in two's complement representation
+
+        // It's not possible to have a negative value in register X without the negative flag
+        // already being set, which in turn makes it difficult to test that the negative flag gets
+        // set.
+        //
+        // Therefore, instead of using instructions to get a negative value into register X and
+        // running the `INX` instruction and checking the negative flag, the register X has been
+        // set manually to a negative value. This means that the negative flag will not be set when
+        // the `INX` instruction runs, and thus it can be checked if the `inx()` method sets the
+        // negative flag as expected or not
+        cpu.register_x = negative_value;
+        let program = vec![inx_opcode, 0x00];
+        cpu.interpret(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, true);
+    }
+
+    #[test]
+    fn inx_clears_negative_flag() {
+        let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let inx_opcode = 0xE8;
+        let negative_one = 0b1111_1111; // -1 in two's-complement representation
+
+        // Program does the following:
+        // - load the value representing -1 into register A
+        // - transfer -1 store in register A to register X (negative flag will be set)
+        // - increment the -1 stored in register X to 0 (negative flag should then be cleared)
+        // - break
+        let program = vec![lda_opcode, negative_one, tax_opcode, inx_opcode, 0x00];
+        cpu.interpret(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, false);
     }
 }
