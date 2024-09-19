@@ -2,7 +2,8 @@ struct CPU {
     status: u8,
     register_a: u8,
     register_x: u8,
-    program_counter: u8,
+    program_counter: u16,
+    memory: [u8; 0xFFFF],
 }
 
 impl CPU {
@@ -12,12 +13,33 @@ impl CPU {
             register_a: 0x00,
             register_x: 0x00,
             program_counter: 0x00,
+            memory: [0x00; 0xFFFF],
         }
     }
 
-    pub fn interpret(&mut self, program: Vec<u8>) {
+    pub fn load_and_run(&mut self, program: Vec<u8>) {
+        self.load(program);
+        self.run();
+    }
+
+    fn mem_read(&self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize] = data;
+    }
+
+    fn load(&mut self, program: Vec<u8>) {
+        let program_rom_start: u16 = 0x8000;
+        self.memory[program_rom_start as usize..(program_rom_start as usize + program.len())]
+            .copy_from_slice(&program[..]);
+        self.program_counter = program_rom_start;
+    }
+
+    fn run(&mut self) {
         loop {
-            let opcode = program[self.program_counter as usize];
+            let opcode = self.mem_read(self.program_counter);
             self.program_counter += 1;
 
             match opcode {
@@ -27,7 +49,7 @@ impl CPU {
                     break;
                 }
                 0xA9 => {
-                    self.lda_immediate(program[self.program_counter as usize]);
+                    self.lda_immediate(self.mem_read(self.program_counter));
                     self.program_counter += 1;
                 }
                 0xAA => self.tax(),
@@ -85,7 +107,7 @@ mod tests {
     fn brk_flag_set() {
         let mut cpu = CPU::new();
         let program = vec![0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         let expected_status = 0b0011_0000;
         assert_eq!(expected_status, cpu.status);
     }
@@ -97,7 +119,7 @@ mod tests {
         let value_to_load = 0x05 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
         let expected_status = 0b0011_0000; // bit 5 + break flag
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.register_a, value_to_load);
         assert_eq!(cpu.status, expected_status);
     }
@@ -109,7 +131,7 @@ mod tests {
         let value_to_load = 0x00 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
         let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -120,7 +142,7 @@ mod tests {
         let value_to_load = 0b1000_0000; // -128 in two's complement representation
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
         let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -131,7 +153,7 @@ mod tests {
         let tax_opcode = 0xAA;
         let value_to_load = 0x05;
         let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.register_x, value_to_load);
     }
 
@@ -141,7 +163,7 @@ mod tests {
         let tax_opcode = 0xAA;
         let program = vec![tax_opcode, 0x00];
         let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -155,7 +177,7 @@ mod tests {
         cpu.status = 0b0010_0010; // bit 5 + zero flag
                                   // Assume that a previous operation has set the zero flag, in
                                   // order to be able to detect if the zero flag is cleared
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -166,7 +188,7 @@ mod tests {
         let program = vec![tax_opcode, 0x00];
         let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
         cpu.register_a = 0b1000_0000; // -128 in two's-complement representation
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -180,7 +202,7 @@ mod tests {
         cpu.status = 0b1010_0000; // Assume that a previous operation has set the negative
                                   // flag, in order to be able to detect if the negative
                                   // flag is cleared
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.status, expected_status);
     }
 
@@ -189,7 +211,7 @@ mod tests {
         let mut cpu = CPU::new();
         let inx_opcode = 0xE8;
         let program = vec![inx_opcode, 0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         assert_eq!(cpu.register_x, 0x01);
     }
 
@@ -207,7 +229,7 @@ mod tests {
         // - increment the -1 stored in register X to 0 (zero flag should then be set)
         // - break
         let program = vec![lda_opcode, negative_one, tax_opcode, inx_opcode, 0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -234,7 +256,7 @@ mod tests {
             inx_opcode,
             0x00,
         ];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         let is_zero_flag_set = cpu.status & 0b0000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, false);
     }
@@ -256,7 +278,7 @@ mod tests {
         // negative flag as expected or not
         cpu.register_x = negative_value;
         let program = vec![inx_opcode, 0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -275,7 +297,7 @@ mod tests {
         // - increment the -1 stored in register X to 0 (negative flag should then be cleared)
         // - break
         let program = vec![lda_opcode, negative_one, tax_opcode, inx_opcode, 0x00];
-        cpu.interpret(program);
+        cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
     }
