@@ -1,6 +1,6 @@
 static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
 
-struct CPU {
+pub struct CPU {
     status: u8,
     register_a: u8,
     register_x: u8,
