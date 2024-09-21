@@ -1,3 +1,5 @@
+static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
+
 struct CPU {
     status: u8,
     register_a: u8,
@@ -19,6 +21,7 @@ impl CPU {
 
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
+        self.reset();
         self.run();
     }
 
@@ -26,15 +29,37 @@ impl CPU {
         self.memory[addr as usize]
     }
 
+    /// Read `u16` value stored in little-endian format, from two contiguous memory addresses each
+    /// storing a single `u8` value
+    fn mem_read_u16(&self, pos: u16) -> u16 {
+        let lo = self.mem_read(pos);
+        let hi = self.mem_read(pos + 1);
+        u16::from_le_bytes([lo, hi])
+    }
+
     fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
+    }
+
+    /// Write `u16` value to two contiguous memory addresses, in little-endian format
+    fn mem_write_u16(&mut self, pos: u16, data: u16) {
+        let bytes = u16::to_le_bytes(data);
+        self.mem_write(pos, bytes[0]);
+        self.mem_write(pos + 1, bytes[1]);
+    }
+
+    fn reset(&mut self) {
+        self.register_a = 0;
+        self.register_x = 0;
+        self.status = 0b0010_0000;
+        self.program_counter = self.mem_read_u16(PROGRAM_ROM_START_ADDR);
     }
 
     fn load(&mut self, program: Vec<u8>) {
         let program_rom_start: u16 = 0x8000;
         self.memory[program_rom_start as usize..(program_rom_start as usize + program.len())]
             .copy_from_slice(&program[..]);
-        self.program_counter = program_rom_start;
+        self.mem_write_u16(PROGRAM_ROM_START_ADDR, program_rom_start);
     }
 
     fn run(&mut self) {
@@ -170,40 +195,52 @@ mod tests {
     #[test]
     fn tax_clear_zero_flag() {
         let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
-        let program = vec![tax_opcode, 0x00];
-        let expected_status = 0b0011_0000; // bit 5 + break flag
-        cpu.register_a = 1; // set register A to a non-zero value
-        cpu.status = 0b0010_0010; // bit 5 + zero flag
-                                  // Assume that a previous operation has set the zero flag, in
-                                  // order to be able to detect if the zero flag is cleared
+        let value_to_load = 0x04;
+
+        // Program does the following:
+        // - load the value representing 4 into register A (zero flag should be cleared)
+        // - transfer 4 stored in register A to register X (zero flag should stay cleared)
+        // - break
+        let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
         cpu.load_and_run(program);
-        assert_eq!(cpu.status, expected_status);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, false);
     }
 
     #[test]
     fn tax_set_negative_flag() {
         let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
-        let program = vec![tax_opcode, 0x00];
-        let expected_status = 0b1011_0000; // bit 5 + negative flag + break flag
-        cpu.register_a = 0b1000_0000; // -128 in two's-complement representation
+        let negative_value = 0b1000_0000; // -128 in two's complement representation
+
+        // Program does the following:
+        // - load the value representing -1 into register A (negative flag should be set)
+        // - transfer -1 stored in register A to register X (negative flag should stay set)
+        // - break
+        let program = vec![lda_opcode, negative_value, tax_opcode, 0x00];
         cpu.load_and_run(program);
-        assert_eq!(cpu.status, expected_status);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, true);
     }
 
     #[test]
     fn tax_clear_negative_flag() {
         let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
-        let program = vec![tax_opcode, 0x00];
-        let expected_status = 0b0011_0000; // bit 5 + break flag
-        cpu.register_a = 1;
-        cpu.status = 0b1010_0000; // Assume that a previous operation has set the negative
-                                  // flag, in order to be able to detect if the negative
-                                  // flag is cleared
+        let value_to_load = 0x04;
+
+        // Program does the following:
+        // - load the value representing 4 into register A (negative flag should be cleared)
+        // - transfer 4 stored in register A to register X (negative flag should stay cleared)
+        // - break
+        let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
         cpu.load_and_run(program);
-        assert_eq!(cpu.status, expected_status);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, false);
     }
 
     #[test]
@@ -264,20 +301,17 @@ mod tests {
     #[test]
     fn inx_sets_negative_flag() {
         let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
         let inx_opcode = 0xE8;
         let negative_value = 0b1000_0000; // -128 in two's complement representation
 
-        // It's not possible to have a negative value in register X without the negative flag
-        // already being set, which in turn makes it difficult to test that the negative flag gets
-        // set.
-        //
-        // Therefore, instead of using instructions to get a negative value into register X and
-        // running the `INX` instruction and checking the negative flag, the register X has been
-        // set manually to a negative value. This means that the negative flag will not be set when
-        // the `INX` instruction runs, and thus it can be checked if the `inx()` method sets the
-        // negative flag as expected or not
-        cpu.register_x = negative_value;
-        let program = vec![inx_opcode, 0x00];
+        // Program does the following:
+        // - load the value representing -128 into register A (negative flag should then be set)
+        // - transfer -128 store in register A to register X (negative flag should stay set)
+        // - increment the -128 stored in register X to -127 (negative flag should stay set)
+        // - break
+        let program = vec![lda_opcode, negative_value, tax_opcode, inx_opcode, 0x00];
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
