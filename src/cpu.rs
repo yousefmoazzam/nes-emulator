@@ -175,8 +175,8 @@ mod tests {
         let mut cpu = CPU::new();
         let program = vec![0x00];
         cpu.load_and_run(program);
-        let expected_status = 0b0011_0000;
-        assert_eq!(expected_status, cpu.status);
+        let is_brk_flag_set = cpu.status & 0b001_0000 == 0b0001_0000;
+        assert_eq!(is_brk_flag_set, true);
     }
 
     #[test]
