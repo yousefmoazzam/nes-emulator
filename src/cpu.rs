@@ -3,6 +3,7 @@ static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
 enum AddressingMode {
     Immediate,
     Absolute,
+    ZeroPage,
 }
 
 pub struct CPU {
@@ -88,6 +89,10 @@ impl CPU {
                     self.sta(&AddressingMode::Absolute);
                     self.program_counter += 2;
                 }
+                0xA6 => {
+                    self.ldx(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -117,6 +122,7 @@ impl CPU {
                 let hi = self.mem_read(self.program_counter + 1);
                 u16::from_le_bytes([lo, hi])
             }
+            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
         }
     }
 
@@ -125,6 +131,14 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a = value;
+        self.update_negative_and_zero_flags(value);
+    }
+
+    /// `LDX` instruction
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_x = value;
         self.update_negative_and_zero_flags(value);
     }
 
@@ -387,5 +401,33 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.mem_read(u16::from_le_bytes([addr_lo, addr_hi])), value);
+    }
+
+    #[test]
+    fn ldx_zero_page_addressing_loads_correct_value() {
+        let mut cpu = CPU::new();
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sta_abs_addr_mode_opcode = 0x8D;
+        let ldx_zero_page_addr_mode_opcode = 0xA6;
+        let zero_page_addr = 0x10;
+        let value = 0x23;
+
+        // Program does the following:
+        // - load `value` into register A
+        // - store contents of register A in `zero_page_addr`
+        // - load contents of `zero_page_addr` into register X
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            value,
+            sta_abs_addr_mode_opcode,
+            zero_page_addr,
+            0x00, // empty most significant byte for zero page addr
+            ldx_zero_page_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.register_x, value);
     }
 }
