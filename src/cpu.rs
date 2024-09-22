@@ -2,6 +2,7 @@ static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
 
 enum AddressingMode {
     Immediate,
+    Absolute,
 }
 
 pub struct CPU {
@@ -83,6 +84,10 @@ impl CPU {
                 }
                 0xAA => self.tax(),
                 0xE8 => self.inx(),
+                0x8D => {
+                    self.sta(&AddressingMode::Absolute);
+                    self.program_counter += 2;
+                }
                 _ => todo!(),
             }
         }
@@ -107,6 +112,11 @@ impl CPU {
     fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
+            AddressingMode::Absolute => {
+                let lo = self.mem_read(self.program_counter);
+                let hi = self.mem_read(self.program_counter + 1);
+                u16::from_le_bytes([lo, hi])
+            }
         }
     }
 
@@ -133,6 +143,12 @@ impl CPU {
         signed_int += 1;
         self.register_x = signed_int as u8;
         self.update_negative_and_zero_flags(self.register_x);
+    }
+
+    /// `STA` instruction
+    fn sta(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        self.mem_write(addr, self.register_a);
     }
 }
 
@@ -346,5 +362,30 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
+    }
+
+    #[test]
+    fn sta_absolute_addressing_stores_correct_value() {
+        let mut cpu = CPU::new();
+        let lda_opcode = 0xA9;
+        let sta_abs_addr_mode_opcode = 0x8D;
+        let addr_lo = 0x00;
+        let addr_hi = 0x10;
+        let value = 0x23;
+
+        // Program does the following:
+        // - load value into register A / accumulator
+        // - store value of register A in 16-bit address given by `addr_lo` and `addr_hi`
+        // - break
+        let program = vec![
+            lda_opcode,
+            value,
+            sta_abs_addr_mode_opcode,
+            addr_lo,
+            addr_hi,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.mem_read(u16::from_le_bytes([addr_lo, addr_hi])), value);
     }
 }
