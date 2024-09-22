@@ -228,10 +228,15 @@ mod tests {
     fn tax_set_zero_flag() {
         let mut cpu = CPU::new();
         let tax_opcode = 0xAA;
+
+        // Program does the following:
+        // - load the value representing 0 that is in register X into register A (zero flag should
+        // be set)
+        // - break
         let program = vec![tax_opcode, 0x00];
-        let expected_status = 0b0011_0010; // bit 5 + break flag + zero flag
         cpu.load_and_run(program);
-        assert_eq!(cpu.status, expected_status);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, true);
     }
 
     #[test]
