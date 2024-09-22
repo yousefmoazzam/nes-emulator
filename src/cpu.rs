@@ -1,5 +1,9 @@
 static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
 
+enum AddressingMode {
+    Immediate,
+}
+
 pub struct CPU {
     status: u8,
     register_a: u8,
@@ -74,7 +78,7 @@ impl CPU {
                     break;
                 }
                 0xA9 => {
-                    self.lda_immediate(self.mem_read(self.program_counter));
+                    self.lda(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
                 0xAA => self.tax(),
@@ -100,8 +104,16 @@ impl CPU {
         }
     }
 
-    /// Immediate addressing mode for `LDA` instruction
-    fn lda_immediate(&mut self, value: u8) {
+    fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+        match mode {
+            AddressingMode::Immediate => self.program_counter,
+        }
+    }
+
+    /// `LDA` instruction
+    fn lda(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
         self.register_a = value;
         self.update_negative_and_zero_flags(value);
     }
