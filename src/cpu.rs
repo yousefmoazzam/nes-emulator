@@ -4,12 +4,14 @@ enum AddressingMode {
     Immediate,
     Absolute,
     ZeroPage,
+    ZeroPageX,
 }
 
 pub struct CPU {
     status: u8,
     register_a: u8,
     register_x: u8,
+    register_y: u8,
     program_counter: u16,
     memory: [u8; 0xFFFF],
 }
@@ -20,6 +22,7 @@ impl CPU {
             status: 0b0010_0000, // bit 5 is always set to 1
             register_a: 0x00,
             register_x: 0x00,
+            register_y: 0x00,
             program_counter: 0x00,
             memory: [0x00; 0xFFFF],
         }
@@ -93,6 +96,14 @@ impl CPU {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0xA2 => {
+                    self.ldx(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
+                0xB4 => {
+                    self.ldy(&AddressingMode::ZeroPageX);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -123,6 +134,10 @@ impl CPU {
                 u16::from_le_bytes([lo, hi])
             }
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::ZeroPageX => {
+                let pos = self.mem_read(self.program_counter) as u16;
+                pos + (self.register_x as u16)
+            }
         }
     }
 
@@ -139,6 +154,14 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_x = value;
+        self.update_negative_and_zero_flags(value);
+    }
+
+    /// `LDY` instruction
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_y = value;
         self.update_negative_and_zero_flags(value);
     }
 
@@ -328,5 +351,38 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.register_x, value);
+    }
+
+    #[test]
+    fn ldy_zero_page_x_addressing_loads_correct_value() {
+        let mut cpu = CPU::new();
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sta_abs_addr_mode_opcode = 0x8D;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let ldy_zero_page_x_addr_mode_opcode = 0xB4;
+        let offset = 0x05;
+        let zero_page_addr = 0x10;
+        let value = 0x23;
+
+        // Program does the following:
+        // - load `value` into register A
+        // - store contents of register A in `zero_page_addr + offset`
+        // - store offset in register X
+        // - load contents of `zero_page_addr + offset` into register Y
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            value,
+            sta_abs_addr_mode_opcode,
+            zero_page_addr + offset,
+            0x00, // empty most significant byte for zero page addr
+            ldx_immediate_addr_mode_opcode,
+            offset,
+            ldy_zero_page_x_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.register_y, value);
     }
 }
