@@ -357,27 +357,22 @@ mod tests {
     #[test]
     fn ldy_zero_page_x_addressing_loads_correct_value() {
         let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
-        let mut cpu = CPU::new(&mut ram);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sta_abs_addr_mode_opcode = 0x8D;
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let ldy_zero_page_x_addr_mode_opcode = 0xB4;
-        let offset = 0x05;
         let zero_page_addr = 0x10;
+        let offset = 0x05;
         let value = 0x23;
 
+        // Write `value` into `zero_page_addr + offset` in the `ram` array
+        ram[(zero_page_addr + offset) as usize] = value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let ldy_zero_page_x_addr_mode_opcode = 0xB4;
+
         // Program does the following:
-        // - load `value` into register A
-        // - store contents of register A in `zero_page_addr + offset`
         // - store offset in register X
         // - load contents of `zero_page_addr + offset` into register Y
         // - break
         let program = vec![
-            lda_immediate_addr_mode_opcode,
-            value,
-            sta_abs_addr_mode_opcode,
-            zero_page_addr + offset,
-            0x00, // empty most significant byte for zero page addr
             ldx_immediate_addr_mode_opcode,
             offset,
             ldy_zero_page_x_addr_mode_opcode,
