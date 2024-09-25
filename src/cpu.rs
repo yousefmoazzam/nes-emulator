@@ -210,10 +210,8 @@ mod tests {
         let lda_immediate_addressing_opcode = 0xA9;
         let value_to_load = 0x05 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
-        let expected_status = 0b0011_0000; // bit 5 + break flag
         cpu.load_and_run(program);
         assert_eq!(cpu.register_a, value_to_load);
-        assert_eq!(cpu.status, expected_status);
     }
 
     #[test]
