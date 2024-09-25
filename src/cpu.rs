@@ -5,6 +5,7 @@ enum AddressingMode {
     Absolute,
     ZeroPage,
     ZeroPageX,
+    ZeroPageY,
 }
 
 pub struct CPU<'a> {
@@ -92,12 +93,20 @@ impl<'a> CPU<'a> {
                     self.sta(&AddressingMode::Absolute);
                     self.program_counter += 2;
                 }
+                0x96 => {
+                    self.stx(&AddressingMode::ZeroPageY);
+                    self.program_counter += 1;
+                }
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
                 0xA2 => {
                     self.ldx(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
+                0xA0 => {
+                    self.ldy(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
                 0xB4 => {
@@ -137,6 +146,10 @@ impl<'a> CPU<'a> {
             AddressingMode::ZeroPageX => {
                 let pos = self.mem_read(self.program_counter) as u16;
                 pos + (self.register_x as u16)
+            }
+            AddressingMode::ZeroPageY => {
+                let pos = self.mem_read(self.program_counter) as u16;
+                pos + (self.register_y as u16)
             }
         }
     }
@@ -186,6 +199,12 @@ impl<'a> CPU<'a> {
     fn sta(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_a);
+    }
+
+    /// `STX` instruction
+    fn stx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        self.mem_write(addr, self.register_x);
     }
 }
 
@@ -331,6 +350,41 @@ mod tests {
         cpu.load_and_run(program);
         let stored_16bit_addr = u16::from_le_bytes([addr_lo, addr_hi]);
         assert_eq!(ram[stored_16bit_addr as usize], value);
+    }
+
+    #[test]
+    fn stx_zero_page_y_addressing_stores_correct_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x10;
+        let offset = 0x05;
+        let value = 0x23;
+
+        // Write `value` into `zero_page_addr + offset` in the `ram` array
+        ram[(zero_page_addr + offset) as usize] = value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let stx_zero_page_y_addr_mode_opcode = 0x96;
+
+        // Program does the following:
+        // - store offset in register Y
+        // - load value into register X
+        // - store contents of register X in `zero_page_addr` offset by the value in register Y
+        // - break
+        let program = vec![
+            ldy_immediate_addr_mode_opcode,
+            offset,
+            ldx_immediate_addr_mode_opcode,
+            value,
+            stx_zero_page_y_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+
+        cpu.load_and_run(program);
+        let stored_value = ram[(zero_page_addr + offset) as usize];
+        assert_eq!(stored_value, value);
     }
 
     #[test]
