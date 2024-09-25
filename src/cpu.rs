@@ -329,7 +329,8 @@ mod tests {
             0x00,
         ];
         cpu.load_and_run(program);
-        assert_eq!(cpu.mem_read(u16::from_le_bytes([addr_lo, addr_hi])), value);
+        let stored_16bit_addr = u16::from_le_bytes([addr_lo, addr_hi]);
+        assert_eq!(ram[stored_16bit_addr as usize], value);
     }
 
     #[test]
