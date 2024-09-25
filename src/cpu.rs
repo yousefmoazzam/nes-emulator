@@ -7,24 +7,24 @@ enum AddressingMode {
     ZeroPageX,
 }
 
-pub struct CPU {
+pub struct CPU<'a> {
     status: u8,
     register_a: u8,
     register_x: u8,
     register_y: u8,
     program_counter: u16,
-    memory: [u8; 0xFFFF],
+    memory: &'a mut [u8],
 }
 
-impl CPU {
-    pub fn new() -> Self {
+impl<'a> CPU<'a> {
+    pub fn new(ram: &'a mut [u8]) -> Self {
         CPU {
             status: 0b0010_0000, // bit 5 is always set to 1
             register_a: 0x00,
             register_x: 0x00,
             register_y: 0x00,
             program_counter: 0x00,
-            memory: [0x00; 0xFFFF],
+            memory: ram,
         }
     }
 
@@ -195,7 +195,8 @@ mod tests {
 
     #[test]
     fn brk_flag_set() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let program = vec![0x00];
         cpu.load_and_run(program);
         let is_brk_flag_set = cpu.status & 0b001_0000 == 0b0001_0000;
@@ -204,7 +205,8 @@ mod tests {
 
     #[test]
     fn lda_immediate_addressing() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_immediate_addressing_opcode = 0xA9;
         let value_to_load = 0x05 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
@@ -216,7 +218,8 @@ mod tests {
 
     #[test]
     fn tax_sets_correct_value() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
         let value_to_load = 0x05;
@@ -227,7 +230,8 @@ mod tests {
 
     #[test]
     fn tax_set_zero_flag() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let tax_opcode = 0xAA;
 
         // Program does the following:
@@ -242,7 +246,8 @@ mod tests {
 
     #[test]
     fn tax_clear_zero_flag() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
         let value_to_load = 0x04;
@@ -259,7 +264,8 @@ mod tests {
 
     #[test]
     fn tax_set_negative_flag() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
         let negative_value = 0b1000_0000; // -128 in two's complement representation
@@ -276,7 +282,8 @@ mod tests {
 
     #[test]
     fn tax_clear_negative_flag() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
         let value_to_load = 0x04;
@@ -293,7 +300,8 @@ mod tests {
 
     #[test]
     fn inx_increments_value_correctly() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let inx_opcode = 0xE8;
         let program = vec![inx_opcode, 0x00];
         cpu.load_and_run(program);
@@ -302,7 +310,8 @@ mod tests {
 
     #[test]
     fn sta_absolute_addressing_stores_correct_value() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_opcode = 0xA9;
         let sta_abs_addr_mode_opcode = 0x8D;
         let addr_lo = 0x00;
@@ -327,7 +336,8 @@ mod tests {
 
     #[test]
     fn ldx_zero_page_addressing_loads_correct_value() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sta_abs_addr_mode_opcode = 0x8D;
         let ldx_zero_page_addr_mode_opcode = 0xA6;
@@ -355,7 +365,8 @@ mod tests {
 
     #[test]
     fn ldy_zero_page_x_addressing_loads_correct_value() {
-        let mut cpu = CPU::new();
+        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sta_abs_addr_mode_opcode = 0x8D;
         let ldx_immediate_addr_mode_opcode = 0xA2;
