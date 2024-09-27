@@ -97,6 +97,10 @@ impl<'a> CPU<'a> {
                     self.stx(&AddressingMode::ZeroPageY);
                     self.program_counter += 1;
                 }
+                0x8C => {
+                    self.sty(&AddressingMode::Absolute);
+                    self.program_counter += 2;
+                }
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -205,6 +209,12 @@ impl<'a> CPU<'a> {
     fn stx(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_x);
+    }
+
+    /// `STY` instruction
+    fn sty(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        self.mem_write(addr, self.register_y);
     }
 }
 
@@ -384,6 +394,34 @@ mod tests {
 
         cpu.load_and_run(program);
         let stored_value = ram[(zero_page_addr + offset) as usize];
+        assert_eq!(stored_value, value);
+    }
+
+    #[test]
+    fn sty_absolute_addressing_stores_correct_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo = 0x00;
+        let hi = 0x10;
+        let value = 0x23;
+
+        let mut cpu = CPU::new(&mut ram);
+        let ldy_immediate_addr_opcode = 0xA0;
+        let sty_absolute_addr_mode_opcode = 0x8C;
+
+        // Program does the following:
+        // - load value into register Y
+        // - store contents of register Y in 16-bit address denoted by `lo` and `hi`
+        // - break
+        let program = vec![
+            ldy_immediate_addr_opcode,
+            value,
+            sty_absolute_addr_mode_opcode,
+            lo,
+            hi,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let stored_value = ram[u16::from_le_bytes([lo, hi]) as usize];
         assert_eq!(stored_value, value);
     }
 
