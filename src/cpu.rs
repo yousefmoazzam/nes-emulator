@@ -61,6 +61,7 @@ impl<'a> CPU<'a> {
     fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
+        self.register_y = 0;
         self.status = 0b0010_0000;
         self.program_counter = self.mem_read_u16(PROGRAM_ROM_START_ADDR);
     }
