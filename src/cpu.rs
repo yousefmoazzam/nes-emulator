@@ -3,6 +3,7 @@ static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
 enum AddressingMode {
     Immediate,
     Absolute,
+    AbsoluteX,
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
@@ -118,6 +119,10 @@ impl<'a> CPU<'a> {
                     self.ldy(&AddressingMode::ZeroPageX);
                     self.program_counter += 1;
                 }
+                0x3D => {
+                    self.and(&AddressingMode::AbsoluteX);
+                    self.program_counter += 2;
+                }
                 _ => todo!(),
             }
         }
@@ -146,6 +151,11 @@ impl<'a> CPU<'a> {
                 let lo = self.mem_read(self.program_counter);
                 let hi = self.mem_read(self.program_counter + 1);
                 u16::from_le_bytes([lo, hi])
+            }
+            AddressingMode::AbsoluteX => {
+                let lo = self.mem_read(self.program_counter);
+                let hi = self.mem_read(self.program_counter + 1);
+                u16::from_le_bytes([lo, hi]) + self.register_x as u16
             }
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
             AddressingMode::ZeroPageX => {
@@ -216,6 +226,14 @@ impl<'a> CPU<'a> {
     fn sty(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_y);
+    }
+
+    /// `AND` instruction
+    fn and(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_a &= value;
+        self.update_negative_and_zero_flags(self.register_a);
     }
 }
 
@@ -473,5 +491,43 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.register_y, value);
+    }
+
+    #[test]
+    fn and_absolute_x_addressing_sets_correct_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo = 0x00;
+        let hi = 0x10;
+        let offset = 0x05;
+        let register_a_value = 0b01100011;
+        let memory_value = 0b10101110;
+
+        // Write value to 16-bit addr + offset
+        let addr_16bit = u16::from_le_bytes([lo, hi]) + offset as u16;
+        ram[addr_16bit as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let and_abs_x_addr_mode_opcode = 0x3D;
+
+        // Program does the following:
+        // - load value into register A
+        // - load offset into register X
+        // - perform bitwise AND between bits in register A and value in memory, and store result
+        // in register A
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            ldx_immediate_addr_mode_opcode,
+            offset,
+            and_abs_x_addr_mode_opcode,
+            lo,
+            hi,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.register_a, register_a_value & memory_value);
     }
 }
