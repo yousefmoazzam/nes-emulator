@@ -7,6 +7,7 @@ enum AddressingMode {
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
+    IndirectX,
 }
 
 pub struct CPU<'a> {
@@ -123,6 +124,10 @@ impl<'a> CPU<'a> {
                     self.and(&AddressingMode::AbsoluteX);
                     self.program_counter += 2;
                 }
+                0xC1 => {
+                    self.cmp(&AddressingMode::IndirectX);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -165,6 +170,11 @@ impl<'a> CPU<'a> {
             AddressingMode::ZeroPageY => {
                 let pos = self.mem_read(self.program_counter) as u16;
                 pos + (self.register_y as u16)
+            }
+            AddressingMode::IndirectX => {
+                let lo = self.mem_read(self.program_counter);
+                let hi = self.mem_read(self.program_counter + 1);
+                u16::from_le_bytes([lo.wrapping_add(self.register_x), hi])
             }
         }
     }
@@ -234,6 +244,20 @@ impl<'a> CPU<'a> {
         let value = self.mem_read(addr);
         self.register_a &= value;
         self.update_negative_and_zero_flags(self.register_a);
+    }
+
+    /// `CMP` instruction
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let res = self.register_a as i8 - value as i8;
+
+        // Update carry flag
+        if res >= 0 {
+            self.status |= 0b0000_0001;
+        }
+
+        self.update_negative_and_zero_flags(res as u8);
     }
 }
 
@@ -529,5 +553,40 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.register_a, register_a_value & memory_value);
+    }
+
+    #[test]
+    fn cmp_indirect_x_addressing_sets_carry_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x10;
+        let offset = 0x05;
+        let register_a_value = 0b00001010; // 10 in two's complement representation
+        let memory_value = 0b00001000; // 8 in two's complement representation
+
+        // Write value to memory address `zero_page_addr + offset`
+        ram[(zero_page_addr + offset) as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cmp_indirect_x_addr_mode_opcode = 0xC1;
+
+        // Program does the following:
+        // - load value into register A
+        // - load offset into register X
+        // - compare value in register A to value in memory
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            ldx_immediate_addr_mode_opcode,
+            offset,
+            cmp_indirect_x_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, true);
     }
 }
