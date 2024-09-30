@@ -8,6 +8,7 @@ enum AddressingMode {
     ZeroPageX,
     ZeroPageY,
     IndirectX,
+    IndirectY,
 }
 
 pub struct CPU<'a> {
@@ -124,6 +125,10 @@ impl<'a> CPU<'a> {
                     self.and(&AddressingMode::AbsoluteX);
                     self.program_counter += 2;
                 }
+                0x51 => {
+                    self.eor(&AddressingMode::IndirectY);
+                    self.program_counter += 1;
+                }
                 0xC1 => {
                     self.cmp(&AddressingMode::IndirectX);
                     self.program_counter += 1;
@@ -175,6 +180,12 @@ impl<'a> CPU<'a> {
                 let lo = self.mem_read(self.program_counter);
                 let hi = self.mem_read(self.program_counter + 1);
                 u16::from_le_bytes([lo.wrapping_add(self.register_x), hi])
+            }
+            AddressingMode::IndirectY => {
+                let pos = self.mem_read(self.program_counter);
+                let lo = self.mem_read(pos as u16);
+                let hi = self.mem_read((pos + 1) as u16);
+                u16::from_le_bytes([lo + self.register_y, hi])
             }
         }
     }
@@ -244,6 +255,14 @@ impl<'a> CPU<'a> {
         let value = self.mem_read(addr);
         self.register_a &= value;
         self.update_negative_and_zero_flags(self.register_a);
+    }
+
+    /// `EOR` instruction
+    fn eor(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let res = self.register_a ^ value;
+        self.update_negative_and_zero_flags(res);
     }
 
     /// `CMP` instruction
@@ -588,5 +607,51 @@ mod tests {
         cpu.load_and_run(program);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
+    }
+
+    #[test]
+    fn eor_indirect_y_addressing_sets_zero_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x10;
+        let lo = 0x15;
+        let hi = 0x20;
+        let lo_offset = 0x05;
+        let memory_value = 0b0101_0101;
+        let register_a_value = 0b0101_0101;
+
+        // Write value of least significant byte of target address (without offset) to zero page
+        // addr
+        ram[zero_page_addr as usize] = lo;
+
+        // Write value of most significant byte of target address to address right after zero page
+        // addr
+        ram[(zero_page_addr + 1) as usize] = hi;
+
+        // Write value to memory in two consecutive addresses (least significant byte given by `lo
+        // + offset`, most significant byte given by `hi`)
+        ram[u16::from_le_bytes([lo + lo_offset, hi]) as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let eor_indirect_y_addr_mode_opcode = 0x51;
+
+        // Program does the following:
+        // - load value into register A
+        // - load least significant byte offset into register Y
+        // - perform XOR between value in register A and memory value
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            ldy_immediate_addr_mode_opcode,
+            lo_offset,
+            eor_indirect_y_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, true);
     }
 }
