@@ -177,9 +177,11 @@ impl<'a> CPU<'a> {
                 pos + (self.register_y as u16)
             }
             AddressingMode::IndirectX => {
-                let lo = self.mem_read(self.program_counter);
-                let hi = self.mem_read(self.program_counter + 1);
-                u16::from_le_bytes([lo.wrapping_add(self.register_x), hi])
+                let pos = self.mem_read(self.program_counter);
+                let pos_offsetted = pos.wrapping_add(self.register_x);
+                let lo = self.mem_read(pos_offsetted as u16);
+                let hi = self.mem_read((pos_offsetted + 1) as u16);
+                u16::from_le_bytes([lo, hi])
             }
             AddressingMode::IndirectY => {
                 let pos = self.mem_read(self.program_counter);
@@ -578,12 +580,19 @@ mod tests {
     fn cmp_indirect_x_addressing_sets_carry_flag() {
         let mut ram = [0x00; 0xFFFF];
         let zero_page_addr = 0x10;
-        let offset = 0x05;
+        let zero_page_addr_offset = 0x05;
+        let lo = 0x15;
+        let hi = 0x20;
         let register_a_value = 0b00001010; // 10 in two's complement representation
         let memory_value = 0b00001000; // 8 in two's complement representation
 
-        // Write value to memory address `zero_page_addr + offset`
-        ram[(zero_page_addr + offset) as usize] = memory_value;
+        // Write target address value's least and most significant bytes starting at
+        // `zero_page_addr + lo_offset`
+        ram[(zero_page_addr + zero_page_addr_offset) as usize] = lo;
+        ram[(zero_page_addr + zero_page_addr_offset + 1) as usize] = hi;
+
+        // Write value to target address
+        ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
         let mut cpu = CPU::new(&mut ram);
         let lda_immediate_addr_mode_opcode = 0xA9;
@@ -599,7 +608,7 @@ mod tests {
             lda_immediate_addr_mode_opcode,
             register_a_value,
             ldx_immediate_addr_mode_opcode,
-            offset,
+            zero_page_addr_offset,
             cmp_indirect_x_addr_mode_opcode,
             zero_page_addr,
             0x00,
