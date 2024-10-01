@@ -4,6 +4,7 @@ enum AddressingMode {
     Immediate,
     Absolute,
     AbsoluteX,
+    AbsoluteY,
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
@@ -130,6 +131,10 @@ impl<'a> CPU<'a> {
                     self.eor(&AddressingMode::IndirectY);
                     self.program_counter += 1;
                 }
+                0x19 => {
+                    self.ora(&AddressingMode::AbsoluteY);
+                    self.program_counter += 2;
+                }
                 0xC1 => {
                     self.cmp(&AddressingMode::IndirectX);
                     self.program_counter += 1;
@@ -168,6 +173,9 @@ impl<'a> CPU<'a> {
             AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
             AddressingMode::AbsoluteX => {
                 self.mem_read_u16(self.program_counter) + self.register_x as u16
+            }
+            AddressingMode::AbsoluteY => {
+                self.mem_read_u16(self.program_counter) + self.register_y as u16
             }
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
             AddressingMode::ZeroPageX => {
@@ -265,6 +273,14 @@ impl<'a> CPU<'a> {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         let res = self.register_a ^ value;
+        self.update_negative_and_zero_flags(res);
+    }
+
+    /// `ORA` instruction
+    fn ora(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let res = self.register_a | value;
         self.update_negative_and_zero_flags(res);
     }
 
@@ -669,6 +685,44 @@ mod tests {
         cpu.load_and_run(program);
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
+    }
+
+    #[test]
+    fn ora_absolute_y_addressing_mode_sets_negative_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo = 0x1F;
+        let hi = 0x25;
+        let offset = 0x10;
+        let register_a_value = 0b1001_1001;
+        let memory_value = 0b0110_0000;
+
+        // Write value to memory address given by `offset` applied to the 16-bit address described
+        // by `lo` and `hi`
+        ram[(u16::from_le_bytes([lo, hi]) + offset as u16) as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addressing_opcode = 0xA9;
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let ora_absolute_y_addr_mode_opcode = 0x19;
+
+        // Program does the following:
+        // - load value into register A
+        // - load offset into register Y
+        // - perform OR between value in register A and memory value
+        // - break
+        let program = vec![
+            lda_immediate_addressing_opcode,
+            register_a_value,
+            ldy_immediate_addr_mode_opcode,
+            offset,
+            ora_absolute_y_addr_mode_opcode,
+            lo,
+            hi,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, true);
     }
 
     #[test]
