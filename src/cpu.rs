@@ -186,9 +186,7 @@ impl<'a> CPU<'a> {
             AddressingMode::IndirectX => {
                 let pos = self.mem_read(self.program_counter);
                 let pos_offsetted = pos.wrapping_add(self.register_x);
-                let lo = self.mem_read(pos_offsetted as u16);
-                let hi = self.mem_read((pos_offsetted + 1) as u16);
-                u16::from_le_bytes([lo, hi])
+                self.mem_read_u16(pos_offsetted as u16)
             }
             AddressingMode::IndirectY => {
                 let pos = self.mem_read(self.program_counter);
