@@ -171,9 +171,7 @@ impl<'a> CPU<'a> {
                 u16::from_le_bytes([lo, hi])
             }
             AddressingMode::AbsoluteX => {
-                let lo = self.mem_read(self.program_counter);
-                let hi = self.mem_read(self.program_counter + 1);
-                u16::from_le_bytes([lo, hi]) + self.register_x as u16
+                self.mem_read_u16(self.program_counter) + self.register_x as u16
             }
             AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
             AddressingMode::ZeroPageX => {
