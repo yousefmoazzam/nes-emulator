@@ -165,11 +165,7 @@ impl<'a> CPU<'a> {
     fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
-            AddressingMode::Absolute => {
-                let lo = self.mem_read(self.program_counter);
-                let hi = self.mem_read(self.program_counter + 1);
-                u16::from_le_bytes([lo, hi])
-            }
+            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
             AddressingMode::AbsoluteX => {
                 self.mem_read_u16(self.program_counter) + self.register_x as u16
             }
