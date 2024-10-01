@@ -7,6 +7,7 @@ enum AddressingMode {
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
+    Indirect,
     IndirectX,
     IndirectY,
 }
@@ -133,6 +134,13 @@ impl<'a> CPU<'a> {
                     self.cmp(&AddressingMode::IndirectX);
                     self.program_counter += 1;
                 }
+                0x6C => {
+                    self.jmp(&AddressingMode::Indirect);
+                    // Do not increment for the two bytes given to the instruction. Also do not
+                    // increment to move past the instruction, so the increment done in the loop
+                    // outside the `match` must be undone. Hence, decrement by 1.
+                    self.program_counter -= 1;
+                }
                 _ => todo!(),
             }
         }
@@ -176,6 +184,7 @@ impl<'a> CPU<'a> {
                 let pos = self.mem_read(self.program_counter) as u16;
                 pos + (self.register_y as u16)
             }
+            AddressingMode::Indirect => self.mem_read_u16(self.program_counter),
             AddressingMode::IndirectX => {
                 let pos = self.mem_read(self.program_counter);
                 let pos_offsetted = pos.wrapping_add(self.register_x);
@@ -279,6 +288,12 @@ impl<'a> CPU<'a> {
         }
 
         self.update_negative_and_zero_flags(res as u8);
+    }
+
+    /// `JMP` instruction
+    fn jmp(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        self.program_counter = addr;
     }
 }
 
@@ -662,5 +677,21 @@ mod tests {
         cpu.load_and_run(program);
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
+    }
+
+    #[test]
+    fn jmp_indirect_addressing_updates_program_counter_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo = 0x1F;
+        let hi = 0x25;
+        let mut cpu = CPU::new(&mut ram);
+        let jmp_indirect_addr_mode_opcode = 0x6C;
+
+        // Program does the following:
+        // - jump to 16-bit address given by `lo` and `hi`
+        // - break
+        let program = vec![jmp_indirect_addr_mode_opcode, lo, hi, 0x00];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.program_counter, u16::from_le_bytes([lo, hi]));
     }
 }
