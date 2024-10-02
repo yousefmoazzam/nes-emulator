@@ -95,6 +95,10 @@ impl<'a> CPU<'a> {
                 }
                 0xAA => self.tax(),
                 0xE8 => self.inx(),
+                0xC6 => {
+                    self.dec(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 0x8D => {
                     self.sta(&AddressingMode::Absolute);
                     self.program_counter += 2;
@@ -240,6 +244,18 @@ impl<'a> CPU<'a> {
         signed_int += 1;
         self.register_x = signed_int as u8;
         self.update_negative_and_zero_flags(self.register_x);
+    }
+
+    /// `DEC` instruction
+    fn dec(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        // Cast value represented by bits stored in `addr` to `i8`, to be able to decrement the
+        // signed integer representation using rust's `-=` operator, rather than doing the bit
+        // fiddling ourselves
+        let mut signed_int = self.mem_read(addr);
+        signed_int -= 1;
+        self.mem_write(addr, signed_int as u8);
+        self.update_negative_and_zero_flags(signed_int);
     }
 
     /// `STA` instruction
@@ -739,5 +755,23 @@ mod tests {
         let program = vec![jmp_indirect_addr_mode_opcode, lo, hi, 0x00];
         cpu.load_and_run(program);
         assert_eq!(cpu.program_counter, u16::from_le_bytes([lo, hi]));
+    }
+
+    #[test]
+    fn dec_zero_page_addressing_mode_modifies_value_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x25;
+        let value = 0x05;
+        ram[zero_page_addr as usize] = value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let dec_zero_page_addr_mode_opcode = 0xC6;
+
+        // Program does the following:
+        // - decrement value in memory address
+        // - break
+        let program = vec![dec_zero_page_addr_mode_opcode, zero_page_addr];
+        cpu.load_and_run(program);
+        assert_eq!((value as i8) - 1, ram[zero_page_addr as usize] as i8);
     }
 }
