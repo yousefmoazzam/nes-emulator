@@ -18,6 +18,7 @@ pub struct CPU<'a> {
     register_a: u8,
     register_x: u8,
     register_y: u8,
+    stack_register: u8,
     program_counter: u16,
     memory: &'a mut [u8],
 }
@@ -29,6 +30,7 @@ impl<'a> CPU<'a> {
             register_a: 0x00,
             register_x: 0x00,
             register_y: 0x00,
+            stack_register: 0x00,
             program_counter: 0x00,
             memory: ram,
         }
@@ -111,6 +113,7 @@ impl<'a> CPU<'a> {
                     self.sty(&AddressingMode::Absolute);
                     self.program_counter += 2;
                 }
+                0x9A => self.txs(),
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -274,6 +277,11 @@ impl<'a> CPU<'a> {
     fn sty(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_y);
+    }
+
+    /// `TXS` instruction
+    fn txs(&mut self) {
+        self.stack_register = self.register_x;
     }
 
     /// `AND` instruction
@@ -773,5 +781,27 @@ mod tests {
         let program = vec![dec_zero_page_addr_mode_opcode, zero_page_addr];
         cpu.load_and_run(program);
         assert_eq!((value as i8) - 1, ram[zero_page_addr as usize] as i8);
+    }
+
+    #[test]
+    fn txs_transfers_register_x_value_to_stack_register() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 0x04;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
+
+        // Program does the following:
+        // - load value in register X
+        // - transfer value from register X to stack register
+        // - break
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            txs_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.stack_register, register_x_value);
     }
 }
