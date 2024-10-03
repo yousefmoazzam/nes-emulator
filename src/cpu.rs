@@ -114,6 +114,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 2;
                 }
                 0x9A => self.txs(),
+                0xBA => self.tsx(),
                 0x48 => self.pha(),
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
@@ -283,6 +284,11 @@ impl<'a> CPU<'a> {
     /// `TXS` instruction
     fn txs(&mut self) {
         self.stack_register = self.register_x;
+    }
+
+    /// `TSX` instruction
+    fn tsx(&mut self) {
+        self.register_x = self.stack_register;
     }
 
     /// `PHA` instruction
@@ -830,5 +836,30 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.stack_register, register_a_value);
+    }
+
+    #[test]
+    fn tsx_transfers_stack_register_value_to_register_x() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0x16;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addressing_opcode = 0xA9;
+        let pha_opcode = 0x048;
+        let tsx_opcode = 0xBA;
+
+        // Program does the following:
+        // - load value into register A
+        // - copy value in register A to stack register
+        // - copy vlaue in stack register to register X
+        // - break
+        let program = vec![
+            lda_immediate_addressing_opcode,
+            register_a_value,
+            pha_opcode,
+            tsx_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(cpu.register_x, register_a_value);
     }
 }
