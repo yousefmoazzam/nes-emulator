@@ -155,6 +155,10 @@ impl<'a> CPU<'a> {
                     // outside the `match` must be undone. Hence, decrement by 1.
                     self.program_counter -= 1;
                 }
+                0x24 => {
+                    self.bit(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -338,6 +342,17 @@ impl<'a> CPU<'a> {
     fn jmp(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.program_counter = addr;
+    }
+
+    /// `BIT` instruction
+    fn bit(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let res = self.register_a & value;
+
+        if res & 0b0100_0000 == 0b0100_0000 {
+            self.status |= 0b0100_0000;
+        }
     }
 }
 
@@ -861,5 +876,33 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(cpu.register_x, register_a_value);
+    }
+
+    #[test]
+    fn bit_zero_page_addressing_mode_sets_overflow_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x25;
+        let memory_value = 0b0100_1000;
+        let register_a_value = 0b1100_0100;
+        ram[zero_page_addr as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addressing_opcode = 0xA9;
+        let bit_zero_page_addr_mode_opcode = 0x24;
+
+        // Program does the following:
+        // - load value into register A
+        // - perform BIT instruction between register A value and value in memory
+        // - break
+        let program = vec![
+            lda_immediate_addressing_opcode,
+            register_a_value,
+            bit_zero_page_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(is_overflow_flag_set, true);
     }
 }
