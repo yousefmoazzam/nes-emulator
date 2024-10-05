@@ -352,6 +352,8 @@ impl<'a> CPU<'a> {
 
         if res & 0b0100_0000 == 0b0100_0000 {
             self.status |= 0b0100_0000;
+        } else {
+            self.status &= 0b1011_1111;
         }
     }
 }
@@ -904,5 +906,41 @@ mod tests {
         cpu.load_and_run(program);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, true);
+    }
+
+    #[test]
+    fn bit_zero_page_addressing_mode_clears_overflow_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr_set = 0x25;
+        let zero_page_addr_clear = 0x30;
+        let memory_value_set = 0b0100_1000;
+        let memory_value_clear = 0b0000_1100;
+        let register_a_value = 0b1100_0100;
+        ram[zero_page_addr_set as usize] = memory_value_set;
+        ram[zero_page_addr_clear as usize] = memory_value_clear;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addressing_opcode = 0xA9;
+        let bit_zero_page_addr_mode_opcode = 0x24;
+
+        // Program does the following:
+        // - load value into register A
+        // - perform BIT instruction between register A value and value at address
+        // `zero_page_addr_set` (should set the overflow flag)
+        // - perform BIT instruction between register A value and value at address
+        // `zero_page_addr_clear` (should clear the overflow flag)
+        // - break
+        let program = vec![
+            lda_immediate_addressing_opcode,
+            register_a_value,
+            bit_zero_page_addr_mode_opcode,
+            zero_page_addr_set,
+            bit_zero_page_addr_mode_opcode,
+            zero_page_addr_clear,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(is_overflow_flag_set, false);
     }
 }
