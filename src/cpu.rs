@@ -361,6 +361,8 @@ impl<'a> CPU<'a> {
 
         if value & 0b1000_0000 != 0 {
             self.status |= 0b1000_0000;
+        } else {
+            self.status &= 0b0111_1111;
         }
     }
 }
@@ -955,5 +957,40 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
+    }
+
+    #[test]
+    fn bit_absolute_addressing_mode_clears_negative_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo_set = 0x10;
+        let hi_set = 0xA1;
+        let lo_clear = 0x15;
+        let hi_clear = 0xA8;
+        let memory_value_set = 0b1000_0000;
+        let memory_value_clear = 0b0100_0000;
+        ram[u16::from_le_bytes([lo_set, hi_set]) as usize] = memory_value_set;
+        ram[u16::from_le_bytes([lo_clear, hi_clear]) as usize] = memory_value_clear;
+
+        let mut cpu = CPU::new(&mut ram);
+        let bit_absolute_addr_mode_opcode = 0x2C;
+
+        // Program does the following:
+        // - perform BIT instruction with value in 16-bit address given by `lo_set` and `hi_set`
+        // (should set negative flag)
+        // - perform BIT instruction with value in 16-bit address given by `lo_clear` and
+        // `hi_clear` (should clear negative flag)
+        // - break
+        let program = vec![
+            bit_absolute_addr_mode_opcode,
+            lo_set,
+            hi_set,
+            bit_absolute_addr_mode_opcode,
+            lo_clear,
+            hi_clear,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, false);
     }
 }
