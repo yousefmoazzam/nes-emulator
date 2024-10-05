@@ -159,6 +159,10 @@ impl<'a> CPU<'a> {
                     self.bit(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0x2C => {
+                    self.bit(&AddressingMode::Absolute);
+                    self.program_counter += 2;
+                }
                 _ => todo!(),
             }
         }
@@ -353,6 +357,10 @@ impl<'a> CPU<'a> {
             self.status |= 0b0100_0000;
         } else {
             self.status &= 0b1011_1111;
+        }
+
+        if value & 0b1000_0000 != 0 {
+            self.status |= 0b1000_0000;
         }
     }
 }
@@ -927,5 +935,25 @@ mod tests {
         cpu.load_and_run(program);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, false);
+    }
+
+    #[test]
+    fn bit_absolute_addressing_mode_sets_negative_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let lo = 0x10;
+        let hi = 0xA1;
+        let memory_value = 0b1000_0000;
+        ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
+
+        let mut cpu = CPU::new(&mut ram);
+        let bit_absolute_addr_mode_opcode = 0x2C;
+
+        // Program does the following:
+        // - perform BIT instruction with value in 16-bit address given by `lo` and `hi`
+        // - break
+        let program = vec![bit_absolute_addr_mode_opcode, lo, hi, 0x00];
+        cpu.load_and_run(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, true);
     }
 }
