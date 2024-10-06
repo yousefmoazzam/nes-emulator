@@ -166,6 +166,7 @@ impl<'a> CPU<'a> {
                 0x90 => self.bcc(),
                 0xB0 => self.bcs(),
                 0xF0 => self.beq(),
+                0x30 => self.bmi(),
                 0x38 => self.sec(),
                 0x18 => self.clc(),
                 _ => todo!(),
@@ -399,6 +400,15 @@ impl<'a> CPU<'a> {
     /// `BEQ` instruction
     fn beq(&mut self) {
         if self.status & 0b0000_0010 == 0b0000_0010 {
+            let offset = self.mem_read(self.program_counter) as i8;
+            let offsetted_program_counter = self.program_counter as i32 + offset as i32;
+            self.program_counter = offsetted_program_counter as u16;
+        }
+    }
+
+    /// `BMI` instruction
+    fn bmi(&mut self) {
+        if self.status & 0b1000_0000 == 0b1000_0000 {
             let offset = self.mem_read(self.program_counter) as i8;
             let offsetted_program_counter = self.program_counter as i32 + offset as i32;
             self.program_counter = offsetted_program_counter as u16;
@@ -1205,6 +1215,36 @@ mod tests {
             + no_of_instructions_before_offset_is_read
             + offset as i32
             + increment_after_reading_bcc_instruction;
+        cpu.load_and_run(program);
+        assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
+    }
+
+    #[test]
+    fn bmi_correctly_offsets_program_counter() {
+        let mut ram = [0x00; 0xFFFF];
+        let program_counter_start: u16 = 0x8000;
+        let offset = -6i8;
+        let register_a_value = -3i8;
+
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let bmi_opcode = 0x30;
+
+        // Program does the following:
+        // - load negative value into register A (to set the negative flag)
+        // - execute BMI instruction (which does non-trivial action if negative flag is set)
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value as u8,
+            bmi_opcode,
+            offset as u8,
+        ];
+        let no_of_instructions_before_offset_is_read = 3;
+        let increment_after_reading_bmi_instruction = 1;
+        let expected_program_counter_value = program_counter_start as i32
+            + no_of_instructions_before_offset_is_read
+            + offset as i32
+            + increment_after_reading_bmi_instruction;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
