@@ -165,6 +165,7 @@ impl<'a> CPU<'a> {
                 }
                 0xF0 => self.beq(),
                 0x38 => self.sec(),
+                0x18 => self.clc(),
                 _ => todo!(),
             }
         }
@@ -387,6 +388,11 @@ impl<'a> CPU<'a> {
     /// `SEC` instruction
     fn sec(&mut self) {
         self.status |= 0b0000_0001;
+    }
+
+    /// `CLC` instruction
+    fn clc(&mut self) {
+        self.status &= 0b1111_1110;
     }
 }
 
@@ -1119,5 +1125,22 @@ mod tests {
         cpu.load_and_run(program);
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
+    }
+
+    #[test]
+    fn clc_clears_carry_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let sec_opcode = 0x38;
+        let clc_opcode = 0x18;
+
+        // Prorgam does the following:
+        // - set the carry flag (to be able to verify that the carry flag has been cleared)
+        // - clear the carry flag
+        // - break
+        let program = vec![sec_opcode, clc_opcode, 0x00];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, false);
     }
 }
