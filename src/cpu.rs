@@ -164,6 +164,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 2;
                 }
                 0xF0 => self.beq(),
+                0x38 => self.sec(),
                 _ => todo!(),
             }
         }
@@ -381,6 +382,11 @@ impl<'a> CPU<'a> {
             let offsetted_program_counter = self.program_counter as i32 + offset as i32;
             self.program_counter = offsetted_program_counter as u16;
         }
+    }
+
+    /// `SEC` instruction
+    fn sec(&mut self) {
+        self.status |= 0b0000_0001;
     }
 }
 
@@ -1102,5 +1108,16 @@ mod tests {
             + increment_after_reading_beq_instruction;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
+    }
+
+    #[test]
+    fn sec_sets_carry_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let sec_opcode = 0x38;
+        let program = vec![sec_opcode, 0x00];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, true);
     }
 }
