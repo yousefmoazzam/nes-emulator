@@ -171,6 +171,10 @@ impl<'a> CPU<'a> {
                 0xD0 => self.bne(),
                 0x38 => self.sec(),
                 0x18 => self.clc(),
+                0x06 => {
+                    self.asl(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -443,6 +447,17 @@ impl<'a> CPU<'a> {
     /// `CLC` instruction
     fn clc(&mut self) {
         self.status &= 0b1111_1110;
+    }
+
+    /// `ASL` instruction
+    fn asl(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let shifted_value = value << 1;
+
+        if shifted_value == 0 {
+            self.status |= 0b0000_0010;
+        }
     }
 }
 
@@ -1311,5 +1326,23 @@ mod tests {
             + increment_after_reading_bne_instruction;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
+    }
+
+    #[test]
+    fn asl_zero_page_addressing_mode_sets_zero_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let asl_zero_page_addr_mode_opcode = 0x06;
+
+        // Program does the following:
+        // - execute ASL instruction on value in zero page addr
+        // - break
+        let program = vec![asl_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
+        cpu.load_and_run(program);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(is_zero_flag_set, true);
     }
 }
