@@ -1420,7 +1420,7 @@ mod tests {
             0x00,
         ];
         cpu.load_and_run(program);
-        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_001;
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
 
