@@ -491,6 +491,8 @@ impl<'a> CPU<'a> {
         }
 
         let shifted_value = value >> 1;
+        self.mem_write(addr, shifted_value);
+
         if shifted_value == 0 {
             self.status |= 0b0000_0010;
         }
@@ -1463,6 +1465,23 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
+    }
+
+    #[test]
+    fn lsr_zero_page_addressing_mode_modifes_value_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b0000_1000;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let lsr_zero_page_addr_mode_opcode = 0x46;
+
+        // Program does the following:
+        // - execute LSR instruction on value in zero page addr
+        // - break
+        let program = vec![lsr_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
+        cpu.load_and_run(program);
+        assert_eq!(memory_value >> 1, ram[zero_page_addr as usize]);
     }
 
     #[test]
