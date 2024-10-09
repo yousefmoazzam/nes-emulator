@@ -175,6 +175,10 @@ impl<'a> CPU<'a> {
                     self.asl(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0x26 => {
+                    self.rol(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 0x46 => {
                     self.lsr(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -476,6 +480,17 @@ impl<'a> CPU<'a> {
         if is_bit_seven_res_set {
             self.status |= 0b1000_0000;
         }
+    }
+
+    /// `ROL` instruction
+    fn rol(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let mut shifted_value = value << 1;
+        if self.status & 0b0000_0001 == 0b0000_0001 {
+            shifted_value |= 0b0000_0001;
+        }
+        self.mem_write(addr, shifted_value);
     }
 
     /// `LSR` instruction
@@ -1366,6 +1381,31 @@ mod tests {
             + increment_after_reading_bne_instruction;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
+    }
+
+    #[test]
+    fn rol_zero_page_addressing_mode_includes_carry_flag_in_modification() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b0000_0001;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let sec_opcode = 0x38;
+        let rol_zero_page_addr_mode_opcode = 0x26;
+
+        // Program does the following:
+        // - set carry flag
+        // - execute ROL instruction on value in zero page addr (which should take into account the
+        // carry flag being set)
+        // - break
+        let program = vec![
+            sec_opcode,
+            rol_zero_page_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!((memory_value << 1) + 1, ram[zero_page_addr as usize]);
     }
 
     #[test]
