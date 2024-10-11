@@ -494,6 +494,11 @@ impl<'a> CPU<'a> {
             self.status |= 0b0000_0010;
         }
         self.mem_write(addr, shifted_value);
+
+        let is_bit_seven_orig_set = value & 0b1000_0000 == 0b1000_0000;
+        if is_bit_seven_orig_set {
+            self.status |= 0b0000_0001;
+        }
     }
 
     /// `LSR` instruction
@@ -1427,6 +1432,24 @@ mod tests {
         cpu.load_and_run(program);
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
+    }
+
+    #[test]
+    fn rol_zero_page_addressing_mode_sets_carry_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b1000_0000; // bit 7 is set on original value
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let rol_zero_page_addr_mode_opcode = 0x26;
+
+        // Program does the following:
+        // - execute ROL instruction on value in zero page addr
+        // - break
+        let program = vec![rol_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_001;
+        assert_eq!(is_carry_flag_set, true);
     }
 
     #[test]
