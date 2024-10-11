@@ -538,7 +538,10 @@ impl<'a> CPU<'a> {
     fn ror(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        let shifted_value = value >> 1;
+        let mut shifted_value = value >> 1;
+        if self.status & 0b0000_0001 == 0b0000_0001 {
+            shifted_value |= 0b1000_0000;
+        }
         self.mem_write(addr, shifted_value);
     }
 }
@@ -1733,5 +1736,30 @@ mod tests {
         let program = vec![ror_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
         cpu.load_and_run(program);
         assert_eq!(memory_value >> 1, ram[zero_page_addr as usize]);
+    }
+
+    #[test]
+    fn ror_zero_page_addressing_mode_sets_bit_seven_if_carry_flag_set() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b0000_1000;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let sec_opcode = 0x38;
+        let ror_zero_page_addr_mode_opcode = 0x66;
+
+        // Program does the following:
+        // - set carry flag
+        // - execute ROL instruction on value in zero page addr (which should take into account the
+        // carry flag being set)
+        // - break
+        let program = vec![
+            sec_opcode,
+            ror_zero_page_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(0b1000_0100, ram[zero_page_addr as usize]);
     }
 }
