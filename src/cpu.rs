@@ -116,6 +116,7 @@ impl<'a> CPU<'a> {
                 0x9A => self.txs(),
                 0xBA => self.tsx(),
                 0x48 => self.pha(),
+                0x08 => self.php(),
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -326,6 +327,11 @@ impl<'a> CPU<'a> {
     /// `PHA` instruction
     fn pha(&mut self) {
         self.stack_register = self.register_a;
+    }
+
+    /// `PHP` instruction
+    fn php(&mut self) {
+        self.stack_register = self.status;
     }
 
     /// `AND` instruction
@@ -1862,5 +1868,31 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
+    }
+
+    #[test]
+    fn php_sets_stack_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b1000_0000;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let php_opcode = 0x08;
+
+        // Program does the following:
+        // - load value into register A (should set negative flag)
+        // - set carry flag
+        // - execute PHP instruction
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            php_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
+        assert_eq!(expected_status, cpu.stack_register);
     }
 }
