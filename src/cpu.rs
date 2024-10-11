@@ -554,6 +554,8 @@ impl<'a> CPU<'a> {
         } else {
             self.status &= 0b1111_1110;
         }
+
+        self.status &= 0b0111_1111;
     }
 }
 
@@ -1833,5 +1835,32 @@ mod tests {
         cpu.load_and_run(program);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
+    }
+
+    #[test]
+    fn ror_zero_page_addressing_mode_clears_negative_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let register_a_value = 0b1000_0000;
+        let memory_value = 0b0100_0000;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ror_zero_page_addr_mode_opcode = 0x66;
+
+        // Program does the following:
+        // - load value into register A (should set negative flag)
+        // - execute ROR instruction on value in zero page addr (should clear negative flag)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            ror_zero_page_addr_mode_opcode,
+            zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, false);
     }
 }
