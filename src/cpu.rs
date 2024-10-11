@@ -183,6 +183,10 @@ impl<'a> CPU<'a> {
                     self.lsr(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0x66 => {
+                    self.ror(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -528,6 +532,14 @@ impl<'a> CPU<'a> {
         }
 
         self.status &= 0b0111_1111;
+    }
+
+    /// `ROR` instruction
+    fn ror(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let shifted_value = value >> 1;
+        self.mem_write(addr, shifted_value);
     }
 }
 
@@ -1704,5 +1716,22 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
+    }
+
+    #[test]
+    fn ror_zero_page_addressing_mode_leaves_bit_seven_if_carry_flag_clear() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0b0000_1000;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let ror_zero_page_addr_mode_opcode = 0x66;
+
+        // Program does the following:
+        // - execute ROL instruction on value in zero page addr
+        // - break
+        let program = vec![ror_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
+        cpu.load_and_run(program);
+        assert_eq!(memory_value >> 1, ram[zero_page_addr as usize]);
     }
 }
