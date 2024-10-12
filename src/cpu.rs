@@ -101,6 +101,7 @@ impl<'a> CPU<'a> {
                     self.dec(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0xCA => self.dex(),
                 0x8D => {
                     self.sta(&AddressingMode::Absolute);
                     self.program_counter += 2;
@@ -296,6 +297,14 @@ impl<'a> CPU<'a> {
         signed_int -= 1;
         self.mem_write(addr, signed_int as u8);
         self.update_negative_and_zero_flags(signed_int);
+    }
+
+    /// `DEX` instruction
+    fn dex(&mut self) {
+        let mut signed_int = self.register_x as i8;
+        signed_int -= 1;
+        self.update_negative_and_zero_flags(signed_int as u8);
+        self.register_x = signed_int as u8;
     }
 
     /// `STA` instruction
@@ -1029,6 +1038,28 @@ mod tests {
         let program = vec![dec_zero_page_addr_mode_opcode, zero_page_addr];
         cpu.load_and_run(program);
         assert_eq!((value as i8) - 1, ram[zero_page_addr as usize] as i8);
+    }
+
+    #[test]
+    fn dex_decrements_register_x_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 0x10;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let dex_opcode = 0xCA;
+
+        // Program does the following:
+        // - load value into register X
+        // - execute DEX instruction
+        // - break
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            dex_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_x_value - 1, cpu.register_x);
     }
 
     #[test]
