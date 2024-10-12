@@ -96,6 +96,10 @@ impl<'a> CPU<'a> {
                     self.program_counter += 1;
                 }
                 0xAA => self.tax(),
+                0xE6 => {
+                    self.inc(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
                 0xE8 => self.inx(),
                 0xC6 => {
                     self.dec(&AddressingMode::ZeroPage);
@@ -275,6 +279,15 @@ impl<'a> CPU<'a> {
     fn tax(&mut self) {
         self.update_negative_and_zero_flags(self.register_a);
         self.register_x = self.register_a;
+    }
+
+    /// `INC` instruction
+    fn inc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr) as i8;
+        let incremented_value = value + 1;
+        self.mem_write(addr, incremented_value as u8);
+        self.update_negative_and_zero_flags(incremented_value as u8);
     }
 
     /// `INX` instruction
@@ -700,6 +713,23 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
+    }
+
+    #[test]
+    fn inc_zero_page_addressing_mode_increments_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let zero_page_addr = 0x15;
+        let memory_value = 0x23;
+        ram[zero_page_addr as usize] = memory_value;
+        let mut cpu = CPU::new(&mut ram);
+        let inc_zero_page_addr_mode_opcode = 0xE6;
+
+        // Program does the following:
+        // - execute INC instruction on memory address containing value
+        // - break
+        let program = vec![inc_zero_page_addr_mode_opcode, zero_page_addr];
+        cpu.load_and_run(program);
+        assert_eq!(memory_value + 1, ram[zero_page_addr as usize]);
     }
 
     #[test]
