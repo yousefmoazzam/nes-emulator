@@ -101,6 +101,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 1;
                 }
                 0xE8 => self.inx(),
+                0xC8 => self.iny(),
                 0xC6 => {
                     self.dec(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -299,6 +300,14 @@ impl<'a> CPU<'a> {
         signed_int += 1;
         self.register_x = signed_int as u8;
         self.update_negative_and_zero_flags(self.register_x);
+    }
+
+    /// `INY` instruction
+    fn iny(&mut self) {
+        let mut signed_int = self.register_y as i8;
+        signed_int += 1;
+        self.register_y = signed_int as u8;
+        self.update_negative_and_zero_flags(self.register_y);
     }
 
     /// `DEC` instruction
@@ -740,6 +749,28 @@ mod tests {
         let program = vec![inx_opcode, 0x00];
         cpu.load_and_run(program);
         assert_eq!(cpu.register_x, 0x01);
+    }
+
+    #[test]
+    fn iny_increments_register_y_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_y_value = 0x13;
+        let mut cpu = CPU::new(&mut ram);
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let iny_zero_page_addr_mode_opcode = 0xC8;
+
+        // Program does the following:
+        // - load value into register Y
+        // - execute INY instruction
+        // - break
+        let program = vec![
+            ldy_immediate_addr_mode_opcode,
+            register_y_value,
+            iny_zero_page_addr_mode_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_y_value + 1, cpu.register_y);
     }
 
     #[test]
