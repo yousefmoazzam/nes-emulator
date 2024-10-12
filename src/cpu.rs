@@ -102,6 +102,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 1;
                 }
                 0xCA => self.dex(),
+                0x88 => self.dey(),
                 0x8D => {
                     self.sta(&AddressingMode::Absolute);
                     self.program_counter += 2;
@@ -305,6 +306,14 @@ impl<'a> CPU<'a> {
         signed_int -= 1;
         self.update_negative_and_zero_flags(signed_int as u8);
         self.register_x = signed_int as u8;
+    }
+
+    /// `DEY` instruction
+    fn dey(&mut self) {
+        let mut signed_int = self.register_y as i8;
+        signed_int -= 1;
+        self.update_negative_and_zero_flags(signed_int as u8);
+        self.register_y = signed_int as u8;
     }
 
     /// `STA` instruction
@@ -1060,6 +1069,28 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(register_x_value - 1, cpu.register_x);
+    }
+
+    #[test]
+    fn dey_decrements_register_y_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_y_value = 0x10;
+        let mut cpu = CPU::new(&mut ram);
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let dey_opcode = 0x88;
+
+        // Program does the following:
+        // - load value into register Y
+        // - executes DEY instruction
+        // - break
+        let program = vec![
+            ldy_immediate_addr_mode_opcode,
+            register_y_value,
+            dey_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_y_value - 1, cpu.register_y);
     }
 
     #[test]
