@@ -118,6 +118,7 @@ impl<'a> CPU<'a> {
                 0x48 => self.pha(),
                 0x08 => self.php(),
                 0x68 => self.pla(),
+                0x28 => self.plp(),
                 0xA6 => {
                     self.ldx(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -338,6 +339,11 @@ impl<'a> CPU<'a> {
     /// `PLA` instruction
     fn pla(&mut self) {
         self.register_a = self.stack_register;
+    }
+
+    /// `PLP` instruction
+    fn plp(&mut self) {
+        self.status = self.stack_register;
     }
 
     /// `AND` instruction
@@ -1929,5 +1935,29 @@ mod tests {
         cpu.load_and_run(program);
         let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
         assert_eq!(expected_status, cpu.register_a);
+    }
+
+    #[test]
+    fn plp_sets_status_flags_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b1100_0101;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let pha_opcode = 0x48;
+        let plp_opcode = 0x28;
+
+        // Program does the following:
+        // - load value into register A
+        // - put value in register A into stack register
+        // - execute PLP instruction
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            pha_opcode,
+            plp_opcode,
+        ];
+        cpu.load_and_run(program);
+        let expected_status = register_a_value | 0b0001_0000; // expecting bit 5 to be set too
+        assert_eq!(expected_status, cpu.status);
     }
 }
