@@ -624,7 +624,9 @@ impl<'a> CPU<'a> {
     fn adc(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        let res = self.register_a as i8 + value as i8;
+        let is_carry_flag_set = self.status & 0b0000_0001 == 0b0000_0001;
+        let carry_bit = if is_carry_flag_set { 1 } else { 0 };
+        let res = self.register_a as i8 + value as i8 + carry_bit as i8;
         self.register_a = res as u8;
     }
 }
@@ -2118,5 +2120,32 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(register_a_value + memory_value, cpu.register_a);
+    }
+
+    #[test]
+    fn adc_immediate_addressing_mode_correct_value_when_carry_flag_set() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0x20;
+        let memory_value = 0x16;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let adc_immediate_addr_mode_opcode = 0x69;
+
+        // Program does the following:
+        // - load value into register A
+        // - set carry flag
+        // - execute ADC instruction with value given
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_a_value + memory_value + 1, cpu.register_a);
     }
 }
