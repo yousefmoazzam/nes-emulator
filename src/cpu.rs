@@ -628,23 +628,30 @@ impl<'a> CPU<'a> {
         let carry_bit = if is_carry_flag_set { 1 } else { 0 };
         let register_a_i8 = self.register_a as i8;
         let value_i8 = value as i8;
-        let res = i8::wrapping_add(i8::wrapping_add(register_a_i8, value_i8), carry_bit as i8);
+        let res_i8 = i8::wrapping_add(i8::wrapping_add(register_a_i8, value_i8), carry_bit as i8);
 
-        // Check if both main values being added were positive. If they were, check if the result
-        // is positive or negative. If negative, then overflow has occurred at the top boundary of
-        // the `i8` range, so set the overflow flag.
-        if register_a_i8 > 0 && value_i8 > 0 && res < 0 {
+        // As `i8`, check if both main values being added were positive. If they were, check if the
+        // result is positive or negative. If negative, then overflow has occurred at the top
+        // boundary of the `i8` range, so set the overflow flag.
+        if register_a_i8 > 0 && value_i8 > 0 && res_i8 < 0 {
             self.status |= 0b0100_0000;
         }
 
-        // Check if both main values being added were negative. If they were, check if the result
-        // is positive or negative. If positive, then overflow has occurred at the bottom boundary
-        // of the `i8` range, so set the overflow flag.
-        if register_a_i8 < 0 && value_i8 < 0 && res > 0 {
+        // As `i8`, check if both main values being added were negative. If they were, check if the
+        // result is positive or negative. If positive, then overflow has occurred at the bottom
+        // boundary of the `i8` range, so set the overflow flag.
+        if register_a_i8 < 0 && value_i8 < 0 && res_i8 > 0 {
             self.status |= 0b0100_0000;
         }
 
-        self.register_a = res as u8;
+        // As `u8`, check if the sum of the values overflow the range of `u8`. If so, set carry
+        // flag.
+        let res_u8 = u8::wrapping_add(u8::wrapping_add(self.register_a, value), carry_bit);
+        if res_u8 < self.register_a && res_u8 < value {
+            self.status |= 0b0000_0001;
+        }
+
+        self.register_a = res_u8;
     }
 }
 
@@ -2224,5 +2231,35 @@ mod tests {
         assert_eq!(expected_result, cpu.register_a);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, true);
+    }
+
+    #[test]
+    fn adc_immediate_addressing_mode_sets_carry_flag_if_unsigned_overflow() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 127u8;
+        let memory_value = 129u8;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute ADC instruction (adding two values whose unsigned int representation would
+        // overflow the range of `u8`)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        // Overflow `u8` at the top boundary and lose info in extra bit (should be 256, but appears
+        // to be 0 due to info in 8th bit - counting from 0 - being missing from a `u8`)
+        let expected_result = 0b0000_0000;
+        assert_eq!(expected_result, cpu.register_a);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, true);
     }
 }
