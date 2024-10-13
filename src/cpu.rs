@@ -197,6 +197,10 @@ impl<'a> CPU<'a> {
                     self.ror(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
                 }
+                0x69 => {
+                    self.adc(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -614,6 +618,14 @@ impl<'a> CPU<'a> {
         }
 
         self.status &= 0b0111_1111;
+    }
+
+    /// `ADC` instruction
+    fn adc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let res = self.register_a as i8 + value as i8;
+        self.register_a = res as u8;
     }
 }
 
@@ -2082,5 +2094,29 @@ mod tests {
         cpu.load_and_run(program);
         let expected_status = register_a_value | 0b0001_0000; // expecting bit 5 to be set too
         assert_eq!(expected_status, cpu.status);
+    }
+
+    #[test]
+    fn adc_immediate_addressing_mode_correct_value_when_carry_flag_clear() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0x20;
+        let memory_value = 0x16;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute ADC instruction with value given
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_a_value + memory_value, cpu.register_a);
     }
 }
