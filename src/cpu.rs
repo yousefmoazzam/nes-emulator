@@ -636,6 +636,14 @@ impl<'a> CPU<'a> {
         if register_a_i8 > 0 && value_i8 > 0 && res < 0 {
             self.status |= 0b0100_0000;
         }
+
+        // Check if both main values being added were negative. If they were, check if the result
+        // is positive or negative. If positive, then overflow has occurred at the bottom boundary
+        // of the `i8` range, so set the overflow flag.
+        if register_a_i8 < 0 && value_i8 < 0 && res > 0 {
+            self.status |= 0b0100_0000;
+        }
+
         self.register_a = res as u8;
     }
 }
@@ -2183,6 +2191,36 @@ mod tests {
         cpu.load_and_run(program);
         // Overflow `i8` at the top boundary and wrap around to a negative value
         let expected_result = 0b1000_0000;
+        assert_eq!(expected_result, cpu.register_a);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(is_overflow_flag_set, true);
+    }
+
+    #[test]
+    fn adc_immediate_addressing_mode_sets_overflow_flag_two_negatives_output_positive() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b1100_0000; // -64 in two's complement representation
+        let memory_value = 0b1011_1111; // -65 in two's complement representation
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute ADC instruction (adding two negative numbers which overflow an `i8`, so should
+        // produce an 8-bit value whose sign bit is clear, and thus has the wrong sign for adding two
+        // negative numbers)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        // Overflow `i8` at the bottom boundary and wrap around to a positive value
+        let expected_result = 0b0111_1111;
         assert_eq!(expected_result, cpu.register_a);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, true);
