@@ -652,6 +652,7 @@ impl<'a> CPU<'a> {
         }
 
         self.register_a = res_u8;
+        self.update_negative_and_zero_flags(self.register_a);
     }
 }
 
