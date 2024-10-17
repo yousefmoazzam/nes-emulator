@@ -201,6 +201,10 @@ impl<'a> CPU<'a> {
                     self.adc(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
+                0xE9 => {
+                    self.sbc(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
                 _ => todo!(),
             }
         }
@@ -624,6 +628,10 @@ impl<'a> CPU<'a> {
     fn adc(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
+        self.adc_helper(value);
+    }
+
+    fn adc_helper(&mut self, value: u8) {
         let is_carry_flag_set = self.status & 0b0000_0001 == 0b0000_0001;
         let carry_bit = if is_carry_flag_set { 1 } else { 0 };
         let register_a_i8 = self.register_a as i8;
@@ -649,10 +657,29 @@ impl<'a> CPU<'a> {
         let res_u8 = u8::wrapping_add(u8::wrapping_add(self.register_a, value), carry_bit);
         if res_u8 < self.register_a && res_u8 < value {
             self.status |= 0b0000_0001;
+        } else {
+            // If the sum of the values don't overflow the range of `u8`, but the carry flag was set to
+            // begin with, then it should be cleared
+            if self.status & 0b0000_0001 == 0b0000_00001 {
+                self.status &= 0b1111_1110;
+            }
         }
 
         self.register_a = res_u8;
         self.update_negative_and_zero_flags(self.register_a);
+    }
+
+    /// `SBC` instruction
+    fn sbc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr) as i8;
+        // Invert bits, but don't add 1 to get the complement; instead, rely on:
+        // - the carry flag being set prior to SBC
+        // - and the addition of 1 when the carry flag is set in ADC (which is reused here)
+        //
+        // to do the +1 which "completes" the generation of the complement.
+        let inverted = !value;
+        self.adc_helper(inverted as u8);
     }
 }
 
@@ -2262,5 +2289,128 @@ mod tests {
         assert_eq!(expected_result, cpu.register_a);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
+    }
+
+    #[test]
+    fn sbc_immediate_addressing_mode_correct_value_when_carry_flag_set() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b0010_0000; // 32
+        let memory_value = 0b0001_0110; // 22
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
+
+        // Program does the following:
+        // - load value into register A
+        // - set carry flag
+        // - execute SBC instruction with value given
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            sbc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_a_value - memory_value, cpu.register_a);
+    }
+
+    #[test]
+    fn sbc_immediate_addr_mode_sets_overflow_flag_negative_subtract_positive_outputs_positive() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b1100_0000; // -64 in two's complement representation
+        let memory_value = 0b0100_0001; // 65 in two's complement representation
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute SBC instruction (subtracting positive number from negative number should
+        // produce a larger negative number, but will underflow and wrap around, producing an
+        // incorrect positive number)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            sbc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        // Underflow `i8` and wrap around to a positive value
+        let expected_result = 0b0111_1111;
+        assert_eq!(expected_result as i8, cpu.register_a as i8);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(is_overflow_flag_set, true);
+    }
+
+    #[test]
+    fn sbc_immediate_addr_mode_sets_overflow_flag_positive_subtract_negative_outputs_negative() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b0011_1111; // 63 in two's complement representation
+        let memory_value = 0b1011_1111; // -65 in two's complement representation
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute SBC instruction (subtracting negative number from positive number should
+        // produce a larger positive number, but will oveflow and wrap around, producing an
+        // incorrect negative number)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            sbc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        // Overflow `i8` and wrap around to a negative value
+        let expected_result = 0b1000_0000;
+        assert_eq!(expected_result as i8, cpu.register_a as i8);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(is_overflow_flag_set, true);
+    }
+
+    #[test]
+    fn sbc_immediate_addressing_mode_clears_carry_flag_if_unsigned_underflow() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 63u8;
+        let memory_value = 64u8;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
+
+        // Program does the following:
+        // - load value into register A
+        // - set carry flag (for use in SBC instruction)
+        // - execute SBC instruction (subtracting a positive number from a smaller positive number
+        // would underflow the range of `u8`)
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            sec_opcode,
+            sbc_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        // Underflow `u8` and wrap around to the top of `u8` range
+        let expected_result = 0b1111_1111;
+        assert_eq!(expected_result, cpu.register_a);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, false);
     }
 }
