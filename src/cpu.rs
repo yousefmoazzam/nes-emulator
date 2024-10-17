@@ -122,6 +122,7 @@ impl<'a> CPU<'a> {
                 }
                 0x9A => self.txs(),
                 0xBA => self.tsx(),
+                0x8A => self.txa(),
                 0x48 => self.pha(),
                 0x08 => self.php(),
                 0x68 => self.pla(),
@@ -372,6 +373,11 @@ impl<'a> CPU<'a> {
     /// `TSX` instruction
     fn tsx(&mut self) {
         self.register_x = self.stack_register;
+    }
+
+    /// `TXA` instruction
+    fn txa(&mut self) {
+        self.register_a = self.register_x;
     }
 
     /// `PHA` instruction
@@ -2412,5 +2418,22 @@ mod tests {
         assert_eq!(expected_result, cpu.register_a);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
+    }
+
+    #[test]
+    fn txa_sets_register_a_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let value = 0x13;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txa_opcode = 0x8A;
+
+        // Program does the following:
+        // - load value into register X
+        // - execute TXA instruction
+        // - break
+        let program = vec![ldx_immediate_addr_mode_opcode, value, txa_opcode, 0x00];
+        cpu.load_and_run(program);
+        assert_eq!(value, cpu.register_a);
     }
 }
