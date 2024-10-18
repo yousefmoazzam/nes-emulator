@@ -96,6 +96,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 1;
                 }
                 0xAA => self.tax(),
+                0xA8 => self.tay(),
                 0xE6 => {
                     self.inc(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -290,6 +291,12 @@ impl<'a> CPU<'a> {
     fn tax(&mut self) {
         self.update_negative_and_zero_flags(self.register_a);
         self.register_x = self.register_a;
+    }
+
+    /// `TAY` instruction
+    fn tay(&mut self) {
+        self.register_y = self.register_a;
+        self.update_negative_and_zero_flags(self.register_y);
     }
 
     /// `INC` instruction
@@ -2458,5 +2465,22 @@ mod tests {
         let program = vec![ldy_immediate_addr_mode_opcode, value, tya_opcode, 0x00];
         cpu.load_and_run(program);
         assert_eq!(value, cpu.register_a);
+    }
+
+    #[test]
+    fn tay_sets_register_y_value_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let value = 0x6B;
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let tay_opcode = 0xA8;
+
+        // Program does the following:
+        // - load value into register A
+        // - execute TAY instruction
+        // - break
+        let program = vec![lda_immediate_addr_mode_opcode, value, tay_opcode, 0x00];
+        cpu.load_and_run(program);
+        assert_eq!(value, cpu.register_y);
     }
 }
