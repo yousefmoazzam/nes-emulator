@@ -182,6 +182,7 @@ impl<'a> CPU<'a> {
                 0x30 => self.bmi(),
                 0x10 => self.bpl(),
                 0xD0 => self.bne(),
+                0x50 => self.bvc(),
                 0x38 => self.sec(),
                 0x18 => self.clc(),
                 0x06 => {
@@ -530,6 +531,15 @@ impl<'a> CPU<'a> {
     /// `BNE` instruction
     fn bne(&mut self) {
         if self.status & 0b0000_0010 == 0 {
+            let offset = self.mem_read(self.program_counter) as i8;
+            let offsetted_program_counter = self.program_counter as i32 + offset as i32;
+            self.program_counter = offsetted_program_counter as u16;
+        }
+    }
+
+    /// `BVC` instruction
+    fn bvc(&mut self) {
+        if self.status & 0b0100_0000 == 0 {
             let offset = self.mem_read(self.program_counter) as i8;
             let offsetted_program_counter = self.program_counter as i32 + offset as i32;
             self.program_counter = offsetted_program_counter as u16;
@@ -2482,5 +2492,62 @@ mod tests {
         let program = vec![lda_immediate_addr_mode_opcode, value, tay_opcode, 0x00];
         cpu.load_and_run(program);
         assert_eq!(value, cpu.register_y);
+    }
+
+    #[test]
+    fn bvc_doesnt_modify_program_counter_if_overflow_flag_set() {
+        let mut ram = [0x00; 0xFFFF];
+        let program_counter_start: u16 = 0x8000;
+        let offset = 0x10;
+        let register_a_value = 0b0011_1111; // 63 in two's complement representation
+        let memory_value = 0b0100_0001; // 65 in two's complement representation
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+        let bvc_opcode = 0x50;
+
+        // Program does the following:
+        // - load value into register A
+        // - perform addition that sets overflow flag (which affects how the BVC instruction
+        // operates)
+        // - execute BVC instruction
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            bvc_opcode,
+            offset,
+            0x00,
+        ];
+        let no_of_instructions = program.len() as u16;
+        cpu.load_and_run(program);
+        assert_eq!(
+            program_counter_start + no_of_instructions,
+            cpu.program_counter
+        );
+    }
+
+    #[test]
+    fn bvc_offsets_program_counter_correctly_if_overflow_flag_clear() {
+        let mut ram = [0x00; 0xFFFF];
+        let program_counter_start: u16 = 0x8000;
+        let offset = -16i8;
+        let mut cpu = CPU::new(&mut ram);
+        let bvc_opcode = 0x50;
+
+        // Program does the following:
+        // - execute BVC instruction
+        let program = vec![bvc_opcode, offset as u8];
+        cpu.load_and_run(program);
+
+        let no_of_instructions_before_offset_value = 1;
+        let increment_reading_next_opcode_after_offsetting = 1;
+        let expected_program_counter = program_counter_start as i32
+            + no_of_instructions_before_offset_value
+            + offset as i32
+            + increment_reading_next_opcode_after_offsetting;
+        assert_eq!(expected_program_counter as u16, cpu.program_counter);
     }
 }
