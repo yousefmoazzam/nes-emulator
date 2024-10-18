@@ -186,6 +186,7 @@ impl<'a> CPU<'a> {
                 0x70 => self.bvs(),
                 0x38 => self.sec(),
                 0x18 => self.clc(),
+                0xB8 => self.clv(),
                 0x06 => {
                     self.asl(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -564,6 +565,11 @@ impl<'a> CPU<'a> {
     /// `CLC` instruction
     fn clc(&mut self) {
         self.status &= 0b1111_1110;
+    }
+
+    /// `CLV` instruction
+    fn clv(&mut self) {
+        self.status &= 0b1011_1111;
     }
 
     /// `ASL` instruction
@@ -2617,5 +2623,33 @@ mod tests {
             + offset as i32
             + increment_reading_next_opcode_after_offsetting;
         assert_eq!(expected_program_counter as u16, cpu.program_counter);
+    }
+
+    #[test]
+    fn clv_clears_overflow_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_a_value = 0b0011_1111; // 63 in two's complement representation
+        let memory_value = 0b0100_0001; // 65 in two's complement representation
+        let mut cpu = CPU::new(&mut ram);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+        let clv_opcode = 0xB8;
+
+        // Program does the following:
+        // - load value into register A
+        // - perform addition that sets overflow flag
+        // - execute CLV instruction
+        // - break
+        let program = vec![
+            lda_immediate_addr_mode_opcode,
+            register_a_value,
+            adc_immediate_addr_mode_opcode,
+            memory_value,
+            clv_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(false, is_overflow_flag_set);
     }
 }
