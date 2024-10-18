@@ -1640,12 +1640,12 @@ mod tests {
         // Program does the following:
         // - execute BPL instruction (which does non-trivial action if negative flag is clear)
         let program = vec![bpl_opcode, offset as u8];
-        let no_of_instructions_before_offset_is_read = 1;
-        let increment_after_reading_bpl_instruction = 1;
+        let no_of_instructions_before_offset_value = 1;
+        let increment_reading_next_opcode_after_offsetting = 1;
         let expected_program_counter_value = program_counter_start as i32
-            + no_of_instructions_before_offset_is_read
+            + no_of_instructions_before_offset_value
             + offset as i32
-            + increment_after_reading_bpl_instruction;
+            + increment_reading_next_opcode_after_offsetting;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
@@ -1662,12 +1662,12 @@ mod tests {
         // Program does the following:
         // - execute BNE instruction (which does non-trivial action if zero flag is clear)
         let program = vec![bne_opcode, offset as u8];
-        let no_of_instructions_before_offset_is_read = 1;
-        let increment_after_reading_bne_instruction = 1;
+        let no_of_instructions_before_offset_value = 1;
+        let increment_reading_next_opcode_after_offsetting = 1;
         let expected_program_counter_value = program_counter_start as i32
-            + no_of_instructions_before_offset_is_read
+            + no_of_instructions_before_offset_value
             + offset as i32
-            + increment_after_reading_bne_instruction;
+            + increment_reading_next_opcode_after_offsetting;
         cpu.load_and_run(program);
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
