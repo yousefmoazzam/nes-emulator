@@ -1,4 +1,6 @@
 static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
+static STACK_REGISTER_LO: u8 = 0x01;
+static STACK_REGISTER_HI_START: u8 = 0xFF;
 
 enum AddressingMode {
     Immediate,
@@ -30,7 +32,7 @@ impl<'a> CPU<'a> {
             register_a: 0x00,
             register_x: 0x00,
             register_y: 0x00,
-            stack_register: 0x00,
+            stack_register: STACK_REGISTER_HI_START,
             program_counter: 0x00,
             memory: ram,
         }
@@ -396,24 +398,36 @@ impl<'a> CPU<'a> {
         self.register_a = self.register_y;
     }
 
+    fn push_onto_stack(&mut self, value: u8) {
+        let addr = u16::from_le_bytes([STACK_REGISTER_LO, self.stack_register]);
+        self.mem_write(addr, value);
+        self.stack_register -= 1;
+    }
+
+    fn pull_off_of_stack(&mut self) -> u8 {
+        self.stack_register += 1;
+        let addr = u16::from_le_bytes([STACK_REGISTER_LO, self.stack_register]);
+        return self.mem_read(addr);
+    }
+
     /// `PHA` instruction
     fn pha(&mut self) {
-        self.stack_register = self.register_a;
+        self.push_onto_stack(self.register_a);
     }
 
     /// `PHP` instruction
     fn php(&mut self) {
-        self.stack_register = self.status;
+        self.push_onto_stack(self.status);
     }
 
     /// `PLA` instruction
     fn pla(&mut self) {
-        self.register_a = self.stack_register;
+        self.register_a = self.pull_off_of_stack();
     }
 
     /// `PLP` instruction
     fn plp(&mut self) {
-        self.status = self.stack_register;
+        self.status = self.pull_off_of_stack();
     }
 
     /// `AND` instruction
@@ -1288,7 +1302,7 @@ mod tests {
     }
 
     #[test]
-    fn pha_transfers_register_a_value_to_stack_register() {
+    fn pha_pushes_register_a_value_onto_stack() {
         let mut ram = [0x00; 0xFFFF];
         let register_a_value = 0x06;
         let mut cpu = CPU::new(&mut ram);
@@ -1297,7 +1311,7 @@ mod tests {
 
         // Program does the following:
         // - load value into register A
-        // - put copy of value in register A in stack register
+        // - push value in register A onto stack
         // - break
         let program = vec![
             lda_immediate_addressing_opcode,
@@ -1305,32 +1319,26 @@ mod tests {
             pha_opcode,
         ];
         cpu.load_and_run(program);
-        assert_eq!(cpu.stack_register, register_a_value);
+        let stack_address_containing_value =
+            u16::from_le_bytes([STACK_REGISTER_LO, cpu.stack_register + 1]);
+        assert_eq!(
+            ram[stack_address_containing_value as usize],
+            register_a_value
+        );
     }
 
     #[test]
     fn tsx_transfers_stack_register_value_to_register_x() {
         let mut ram = [0x00; 0xFFFF];
-        let register_a_value = 0x16;
         let mut cpu = CPU::new(&mut ram);
-        let lda_immediate_addressing_opcode = 0xA9;
-        let pha_opcode = 0x048;
         let tsx_opcode = 0xBA;
 
         // Program does the following:
-        // - load value into register A
-        // - copy value in register A to stack register
         // - copy vlaue in stack register to register X
         // - break
-        let program = vec![
-            lda_immediate_addressing_opcode,
-            register_a_value,
-            pha_opcode,
-            tsx_opcode,
-            0x00,
-        ];
+        let program = vec![tsx_opcode, 0x00];
         cpu.load_and_run(program);
-        assert_eq!(cpu.register_x, register_a_value);
+        assert_eq!(cpu.register_x, STACK_REGISTER_HI_START);
     }
 
     #[test]
@@ -2117,7 +2125,7 @@ mod tests {
     }
 
     #[test]
-    fn php_sets_stack_correctly() {
+    fn php_pushes_status_flags_onto_stack() {
         let mut ram = [0x00; 0xFFFF];
         let register_a_value = 0b1000_0000;
         let mut cpu = CPU::new(&mut ram);
@@ -2139,7 +2147,12 @@ mod tests {
         ];
         cpu.load_and_run(program);
         let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
-        assert_eq!(expected_status, cpu.stack_register);
+        let stack_address_containing_value =
+            u16::from_le_bytes([STACK_REGISTER_LO, cpu.stack_register + 1]);
+        assert_eq!(
+            ram[stack_address_containing_value as usize],
+            expected_status
+        );
     }
 
     #[test]
