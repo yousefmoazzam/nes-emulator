@@ -163,6 +163,10 @@ impl<'a> CPU<'a> {
                     self.cmp(&AddressingMode::IndirectX);
                     self.program_counter += 1;
                 }
+                0xE0 => {
+                    self.cpx(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
                 0x6C => {
                     self.jmp(&AddressingMode::Indirect);
                     // Do not increment for the two bytes given to the instruction. Also do not
@@ -471,6 +475,15 @@ impl<'a> CPU<'a> {
         }
 
         self.update_negative_and_zero_flags(res as u8);
+    }
+
+    /// `CPX` instruction
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        if self.register_x >= value {
+            self.status |= 0b0000_0001;
+        }
     }
 
     /// `JMP` instruction
@@ -1126,6 +1139,31 @@ mod tests {
             zero_page_addr_offset,
             cmp_indirect_x_addr_mode_opcode,
             zero_page_addr,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, true);
+    }
+
+    #[test]
+    fn cpx_immediate_addressing_sets_carry_flag_if_register_x_geq_to_memory_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 20u8;
+        let memory_value = 15u8;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cpx_immediate_addr_mode_opcode = 0xE0;
+
+        // Program does the following:
+        // - load value into register X
+        // - execute CPX instruction
+        // - break
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            cpx_immediate_addr_mode_opcode,
+            memory_value,
             0x00,
         ];
         cpu.load_and_run(program);
