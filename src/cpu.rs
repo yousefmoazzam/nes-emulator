@@ -170,6 +170,11 @@ impl<'a> CPU<'a> {
                     // outside the `match` must be undone. Hence, decrement by 1.
                     self.program_counter -= 1;
                 }
+                0x20 => {
+                    self.jsr(&AddressingMode::Absolute);
+                    // Do not increment the program counter any more than to get to the first
+                    // operand.
+                }
                 0x24 => {
                     self.bit(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -472,6 +477,17 @@ impl<'a> CPU<'a> {
     fn jmp(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         self.program_counter = addr;
+    }
+
+    /// `JSR` instruction
+    fn jsr(&mut self, mode: &AddressingMode) {
+        let target_addr = self.get_operand_address(mode);
+        let first_operand_addr = self.program_counter;
+        let return_addr = first_operand_addr + 1;
+        let return_addr_bytes = u16::to_le_bytes(return_addr);
+        self.push_onto_stack(return_addr_bytes[1]);
+        self.push_onto_stack(return_addr_bytes[0]);
+        self.program_counter = target_addr;
     }
 
     /// `BIT` instruction
@@ -1215,6 +1231,39 @@ mod tests {
         let program = vec![jmp_indirect_addr_mode_opcode, lo, hi, 0x00];
         cpu.load_and_run(program);
         assert_eq!(cpu.program_counter, u16::from_le_bytes([lo, hi]));
+    }
+
+    #[test]
+    fn jsr_sets_stack_register_and_program_counter_correctly() {
+        let mut ram = [0x00; 0xFFFF];
+        let program_counter_start: u16 = 0x8000;
+        let lo = 0x1F;
+        let hi = 0x25;
+        let mut cpu = CPU::new(&mut ram);
+        let jsr_absolute_addr_mode_opcode = 0x20;
+
+        // Program does the following:
+        // - execute JSR instruction
+        let program = vec![jsr_absolute_addr_mode_opcode, lo, hi];
+        let no_of_instructions = program.len();
+        cpu.load_and_run(program);
+
+        // Check the final program counter value
+        let target_address = u16::from_le_bytes([lo, hi]);
+        let increment_after_jump_from_opcode_read = 1;
+        let expected_program_counter = target_address + increment_after_jump_from_opcode_read;
+        assert_eq!(expected_program_counter, cpu.program_counter);
+
+        // Check the return address stored in the stack
+        let lo_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 1]);
+        let hi_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START]);
+        let lo = ram[lo_addr as usize];
+        let hi = ram[hi_addr as usize];
+        let return_address = u16::from_le_bytes([lo, hi]);
+        assert_eq!(
+            program_counter_start + (no_of_instructions as u16) - 1,
+            return_address
+        );
     }
 
     #[test]
