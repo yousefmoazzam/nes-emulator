@@ -484,6 +484,9 @@ impl<'a> CPU<'a> {
         if self.register_x >= value {
             self.status |= 0b0000_0001;
         }
+
+        let res_i8 = i8::wrapping_sub(self.register_x as i8, value as i8);
+        self.update_negative_and_zero_flags(res_i8 as u8);
     }
 
     /// `JMP` instruction
@@ -1169,6 +1172,31 @@ mod tests {
         cpu.load_and_run(program);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
+    }
+
+    #[test]
+    fn cpx_immediate_addressing_sets_negative_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 0x7F;
+        let memory_value = 0x80;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cpx_immediate_addr_mode_opcode = 0xE0;
+
+        // Program does the following:
+        // - load value into register X
+        // - execute CPX instruction
+        // - break
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            cpx_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(is_negative_flag_set, true);
     }
 
     #[test]
