@@ -167,6 +167,10 @@ impl<'a> CPU<'a> {
                     self.cpx(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
+                0xC0 => {
+                    self.cpy(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
                 0x6C => {
                     self.jmp(&AddressingMode::Indirect);
                     // Do not increment for the two bytes given to the instruction. Also do not
@@ -487,6 +491,15 @@ impl<'a> CPU<'a> {
 
         let res_i8 = i8::wrapping_sub(self.register_x as i8, value as i8);
         self.update_negative_and_zero_flags(res_i8 as u8);
+    }
+
+    /// `CPY` instruction
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        if self.register_y >= value {
+            self.status |= 0b0000_0001;
+        }
     }
 
     /// `JMP` instruction
@@ -1197,6 +1210,31 @@ mod tests {
         cpu.load_and_run(program);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
+    }
+
+    #[test]
+    fn cpy_immediate_addressing_sets_carry_flag_if_register_x_geq_to_memory_value() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_y_value = 20u8;
+        let memory_value = 15u8;
+        let mut cpu = CPU::new(&mut ram);
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let cpy_immediate_addr_mode_opcode = 0xC0;
+
+        // Program does the following:
+        // - load value into register Y
+        // - execute CPY instruction
+        // - break
+        let program = vec![
+            ldy_immediate_addr_mode_opcode,
+            register_y_value,
+            cpy_immediate_addr_mode_opcode,
+            memory_value,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(is_carry_flag_set, true);
     }
 
     #[test]
