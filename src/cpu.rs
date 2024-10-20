@@ -471,14 +471,14 @@ impl<'a> CPU<'a> {
     fn cmp(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        let res = self.register_a as i8 - value as i8;
 
         // Update carry flag
-        if res >= 0 {
+        if self.register_a >= value {
             self.status |= 0b0000_0001;
         }
 
-        self.update_negative_and_zero_flags(res as u8);
+        let res_i8 = i8::wrapping_sub(self.register_x as i8, value as i8);
+        self.update_negative_and_zero_flags(res_i8 as u8);
     }
 
     /// `CPX` instruction
