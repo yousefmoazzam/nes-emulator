@@ -183,6 +183,7 @@ impl<'a> CPU<'a> {
                     // Do not increment the program counter any more than to get to the first
                     // operand.
                 }
+                0x60 => self.rts(),
                 0x24 => {
                     self.bit(&AddressingMode::ZeroPage);
                     self.program_counter += 1;
@@ -521,6 +522,17 @@ impl<'a> CPU<'a> {
         self.push_onto_stack(return_addr_bytes[1]);
         self.push_onto_stack(return_addr_bytes[0]);
         self.program_counter = target_addr;
+    }
+
+    /// `RTS` instruction
+    fn rts(&mut self) {
+        let lo = self.pull_off_of_stack();
+        let hi = self.pull_off_of_stack();
+        let return_addr = u16::from_le_bytes([lo, hi]);
+        // Increment the return address by one, due to the `JSR` instruction pushing onto the stack
+        // the address of its second operands, rather than the address of the next opcode after its
+        // second operand
+        self.program_counter = return_addr + 1;
     }
 
     /// `BIT` instruction
@@ -1397,6 +1409,37 @@ mod tests {
             program_counter_start + (no_of_instructions as u16) - 1,
             return_address
         );
+    }
+
+    #[test]
+    fn rts_enables_subroutine_to_execute_and_pops_stack_when_done() {
+        let mut ram = [0x00; 0xFFFF];
+        let subroutine_start_addr_lo = 0x1F;
+        let subroutine_start_addr_hi = 0x25;
+        let subroutine_start_addr =
+            u16::from_le_bytes([subroutine_start_addr_lo, subroutine_start_addr_hi]);
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let register_a_value = 0x6A;
+        let rts_opcode = 0x60;
+        ram[subroutine_start_addr as usize] = lda_immediate_addr_mode_opcode;
+        ram[(subroutine_start_addr + 1) as usize] = register_a_value;
+        ram[(subroutine_start_addr + 2) as usize] = rts_opcode;
+        let mut cpu = CPU::new(&mut ram);
+        let jsr_absolute_addr_mode_opcode = 0x20;
+
+        // Program does the follow:
+        // - jump to address given by `subroutine_start_addr_lo` and `subroutine_start_addr_hi`
+        // - load value into register A
+        // - exeucte RTS instruction
+        // - break
+        let program = vec![
+            jsr_absolute_addr_mode_opcode,
+            subroutine_start_addr_lo,
+            subroutine_start_addr_hi,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(register_a_value, cpu.register_a);
     }
 
     #[test]
