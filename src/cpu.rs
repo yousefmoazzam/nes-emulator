@@ -226,6 +226,7 @@ impl<'a> CPU<'a> {
                     self.sbc(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
+                0xEA => continue,
                 _ => todo!(),
             }
         }
@@ -2845,5 +2846,33 @@ mod tests {
         cpu.load_and_run(program);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(false, is_overflow_flag_set);
+    }
+
+    #[test]
+    fn nop_doesnt_affect_registers_or_flags() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let nop_opcode = 0xEA;
+
+        // Program does the following:
+        // - execute the NOP instruction
+        // - break
+        let program = vec![nop_opcode, 0x00];
+        cpu.load_and_run(program);
+
+        let program_counter_start: u16 = 0x8000;
+        assert_eq!(cpu.program_counter, program_counter_start + 2);
+        assert_eq!(cpu.register_a, 0x00);
+        assert_eq!(cpu.register_x, 0x00);
+        assert_eq!(cpu.register_y, 0x00);
+        assert_eq!(cpu.stack_register, STACK_REGISTER_HI_START);
+        let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
+        assert_eq!(false, is_zero_flag_set);
+        let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
+        assert_eq!(false, is_overflow_flag_set);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(false, is_negative_flag_set);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(false, is_carry_flag_set);
     }
 }
