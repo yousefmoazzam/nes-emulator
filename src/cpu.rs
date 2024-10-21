@@ -89,8 +89,7 @@ impl<'a> CPU<'a> {
 
             match opcode {
                 0x00 => {
-                    // Set bit 4 to indicate break flag
-                    self.status |= 0b0001_0000;
+                    self.brk();
                     break;
                 }
                 0xA9 => {
@@ -800,6 +799,11 @@ impl<'a> CPU<'a> {
         // to do the +1 which "completes" the generation of the complement.
         let inverted = !value;
         self.adc_helper(inverted as u8);
+    }
+
+    /// `BRK` instruction
+    fn brk(&mut self) {
+        self.status |= 0b0001_0000;
     }
 }
 
