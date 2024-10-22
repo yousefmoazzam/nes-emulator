@@ -1,6 +1,6 @@
 static PROGRAM_ROM_START_ADDR: u16 = 0xFFFC;
-static STACK_REGISTER_LO: u8 = 0x01;
-static STACK_REGISTER_HI_START: u8 = 0xFF;
+static STACK_REGISTER_HI: u8 = 0x01;
+static STACK_REGISTER_LO_START: u8 = 0xFF;
 
 enum AddressingMode {
     Immediate,
@@ -32,7 +32,7 @@ impl<'a> CPU<'a> {
             register_a: 0x00,
             register_x: 0x00,
             register_y: 0x00,
-            stack_register: STACK_REGISTER_HI_START,
+            stack_register: STACK_REGISTER_LO_START,
             program_counter: 0x00,
             memory: ram,
         }
@@ -414,14 +414,14 @@ impl<'a> CPU<'a> {
     }
 
     fn push_onto_stack(&mut self, value: u8) {
-        let addr = u16::from_le_bytes([STACK_REGISTER_LO, self.stack_register]);
+        let addr = u16::from_le_bytes([self.stack_register, STACK_REGISTER_HI]);
         self.mem_write(addr, value);
         self.stack_register -= 1;
     }
 
     fn pull_off_of_stack(&mut self) -> u8 {
         self.stack_register += 1;
-        let addr = u16::from_le_bytes([STACK_REGISTER_LO, self.stack_register]);
+        let addr = u16::from_le_bytes([self.stack_register, STACK_REGISTER_HI]);
         return self.mem_read(addr);
     }
 
@@ -1414,8 +1414,8 @@ mod tests {
         assert_eq!(expected_program_counter, cpu.program_counter);
 
         // Check the return address stored in the stack
-        let lo_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 1]);
-        let hi_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START]);
+        let lo_addr = u16::from_le_bytes([STACK_REGISTER_LO_START - 1, STACK_REGISTER_HI]);
+        let hi_addr = u16::from_le_bytes([STACK_REGISTER_LO_START, STACK_REGISTER_HI]);
         let lo = ram[lo_addr as usize];
         let hi = ram[hi_addr as usize];
         let return_address = u16::from_le_bytes([lo, hi]);
@@ -1559,7 +1559,7 @@ mod tests {
         ];
         cpu.load_and_run(program);
         let stack_address_containing_value =
-            u16::from_le_bytes([STACK_REGISTER_LO, cpu.stack_register + 1]);
+            u16::from_le_bytes([cpu.stack_register + 1, STACK_REGISTER_HI]);
         assert_eq!(
             ram[stack_address_containing_value as usize],
             register_a_value
@@ -1577,7 +1577,7 @@ mod tests {
         // - break
         let program = vec![tsx_opcode, 0x00];
         cpu.load_and_run(program);
-        assert_eq!(cpu.register_x, STACK_REGISTER_HI_START);
+        assert_eq!(cpu.register_x, STACK_REGISTER_LO_START);
     }
 
     #[test]
@@ -2387,7 +2387,7 @@ mod tests {
         cpu.load_and_run(program);
         let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
         let stack_address_containing_value =
-            u16::from_le_bytes([STACK_REGISTER_LO, cpu.stack_register + 1]);
+            u16::from_le_bytes([cpu.stack_register + 1, STACK_REGISTER_HI]);
         assert_eq!(
             ram[stack_address_containing_value as usize],
             expected_status
@@ -2922,7 +2922,7 @@ mod tests {
         assert_eq!(cpu.register_a, 0x00);
         assert_eq!(cpu.register_x, 0x00);
         assert_eq!(cpu.register_y, 0x00);
-        assert_eq!(cpu.stack_register, STACK_REGISTER_HI_START);
+        assert_eq!(cpu.stack_register, STACK_REGISTER_LO_START);
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(false, is_zero_flag_set);
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
@@ -2939,7 +2939,7 @@ mod tests {
         let register_x_value = 0xFC;
         let status_flags = 0b1000_0001;
         let status_flags_stack_addr =
-            u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 2]);
+            u16::from_le_bytes([STACK_REGISTER_LO_START - 2, STACK_REGISTER_HI]);
         ram[status_flags_stack_addr as usize] = status_flags;
         let mut cpu = CPU::new(&mut ram);
         let ldx_immediate_addr_mode_opcode = 0xA2;
@@ -2975,9 +2975,9 @@ mod tests {
         let new_program_counter_hi = 0xAB;
         let new_program_counter =
             u16::from_le_bytes([new_program_counter_lo, new_program_counter_hi]);
-        ram[(u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START])) as usize] =
+        ram[(u16::from_le_bytes([STACK_REGISTER_LO_START, STACK_REGISTER_HI])) as usize] =
             new_program_counter_hi;
-        ram[(u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 1])) as usize] =
+        ram[(u16::from_le_bytes([STACK_REGISTER_LO_START - 1, STACK_REGISTER_HI])) as usize] =
             new_program_counter_lo;
         let mut cpu = CPU::new(&mut ram);
         let ldx_immediate_addr_mode_opcode = 0xA2;
