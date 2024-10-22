@@ -92,6 +92,7 @@ impl<'a> CPU<'a> {
                     self.brk();
                     break;
                 }
+                0x40 => self.rti(),
                 0xA9 => {
                     self.lda(&AddressingMode::Immediate);
                     self.program_counter += 1;
@@ -804,6 +805,11 @@ impl<'a> CPU<'a> {
     /// `BRK` instruction
     fn brk(&mut self) {
         self.status |= 0b0001_0000;
+    }
+
+    /// `RTI` instruction
+    fn rti(&mut self) {
+        self.status = self.pull_off_of_stack();
     }
 }
 
@@ -2921,5 +2927,38 @@ mod tests {
         assert_eq!(false, is_negative_flag_set);
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(false, is_carry_flag_set);
+    }
+
+    #[test]
+    fn rti_first_stack_pop_to_set_status_register() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 0xFE;
+        let status_flags = 0b1000_0001;
+        let top_of_stack_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START]);
+        ram[top_of_stack_addr as usize] = status_flags;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
+        let rti_opcode = 0x40;
+
+        // Program does the following:
+        // - load value into register X
+        // - put register X value into stack register
+        // - execute RTI instruction (prior to this instruction being executed, the top byte of the
+        // stack will have a non-zero value in it, and the stack pointer will be decremented
+        // accordingly)
+        // - break
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            txs_opcode,
+            rti_opcode,
+            0x00,
+        ];
+        cpu.load_and_run(program);
+        let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
+        assert_eq!(true, is_carry_flag_set);
+        let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
+        assert_eq!(true, is_negative_flag_set);
     }
 }
