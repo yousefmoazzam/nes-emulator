@@ -810,6 +810,10 @@ impl<'a> CPU<'a> {
     /// `RTI` instruction
     fn rti(&mut self) {
         self.status = self.pull_off_of_stack();
+        let lo = self.pull_off_of_stack();
+        let hi = self.pull_off_of_stack();
+        let addr = u16::from_le_bytes([lo, hi]);
+        self.program_counter = addr;
     }
 }
 
@@ -2932,10 +2936,11 @@ mod tests {
     #[test]
     fn rti_first_stack_pop_to_set_status_register() {
         let mut ram = [0x00; 0xFFFF];
-        let register_x_value = 0xFE;
+        let register_x_value = 0xFC;
         let status_flags = 0b1000_0001;
-        let top_of_stack_addr = u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START]);
-        ram[top_of_stack_addr as usize] = status_flags;
+        let status_flags_stack_addr =
+            u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 2]);
+        ram[status_flags_stack_addr as usize] = status_flags;
         let mut cpu = CPU::new(&mut ram);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let txs_opcode = 0x9A;
@@ -2960,5 +2965,38 @@ mod tests {
         assert_eq!(true, is_carry_flag_set);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(true, is_negative_flag_set);
+    }
+
+    #[test]
+    fn rti_second_stack_pop_to_set_program_counter() {
+        let mut ram = [0x00; 0xFFFF];
+        let register_x_value = 0xFC;
+        let new_program_counter_lo = 0x15;
+        let new_program_counter_hi = 0xAB;
+        let new_program_counter =
+            u16::from_le_bytes([new_program_counter_lo, new_program_counter_hi]);
+        ram[(u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START])) as usize] =
+            new_program_counter_hi;
+        ram[(u16::from_le_bytes([STACK_REGISTER_LO, STACK_REGISTER_HI_START - 1])) as usize] =
+            new_program_counter_lo;
+        let mut cpu = CPU::new(&mut ram);
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
+        let rti_opcode = 0x40;
+
+        // Program does the following:
+        // - load value into register X
+        // - put register X value into stack register
+        // - execute RTI instruction (prior to this instruction being executed, the penultimate two
+        // bytes of the stack will have non-zero values in them, and the stack pointer will be
+        // decremented accordingly)
+        let program = vec![
+            ldx_immediate_addr_mode_opcode,
+            register_x_value,
+            txs_opcode,
+            rti_opcode,
+        ];
+        cpu.load_and_run(program);
+        assert_eq!(new_program_counter + 1, cpu.program_counter);
     }
 }
