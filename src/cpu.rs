@@ -227,6 +227,7 @@ impl<'a> CPU<'a> {
                     self.sbc(&AddressingMode::Immediate);
                     self.program_counter += 1;
                 }
+                0xF8 => self.sed(),
                 0xEA => continue,
                 _ => todo!(),
             }
@@ -814,6 +815,11 @@ impl<'a> CPU<'a> {
         let hi = self.pull_off_of_stack();
         let addr = u16::from_le_bytes([lo, hi]);
         self.program_counter = addr;
+    }
+
+    /// `SED` instruction
+    fn sed(&mut self) {
+        self.status |= 0b0000_1000;
     }
 }
 
@@ -2998,5 +3004,16 @@ mod tests {
         ];
         cpu.load_and_run(program);
         assert_eq!(new_program_counter + 1, cpu.program_counter);
+    }
+
+    #[test]
+    fn sed_sets_decimal_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let sed_opcode = 0xF8;
+        let program = vec![sed_opcode, 0x00];
+        cpu.load_and_run(program);
+        let is_decimal_flag_set = cpu.status & 0b0000_1000 == 0b0000_1000;
+        assert_eq!(true, is_decimal_flag_set);
     }
 }
