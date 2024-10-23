@@ -230,6 +230,7 @@ impl<'a> CPU<'a> {
                 0xF8 => self.sed(),
                 0xD8 => self.cld(),
                 0x78 => self.sei(),
+                0x58 => self.cli(),
                 0xEA => continue,
                 _ => todo!(),
             }
@@ -832,6 +833,11 @@ impl<'a> CPU<'a> {
     /// `SEI` instruction
     fn sei(&mut self) {
         self.status |= 0b0000_0100;
+    }
+
+    /// `CLI` instruction
+    fn cli(&mut self) {
+        self.status &= 0b1111_1011;
     }
 }
 
@@ -3050,5 +3056,17 @@ mod tests {
         cpu.load_and_run(program);
         let is_interrupt_disable_flag_set = cpu.status & 0b0000_0100 == 0b0000_0100;
         assert_eq!(true, is_interrupt_disable_flag_set);
+    }
+
+    #[test]
+    fn cli_clears_interrupt_disable_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let sei_opcode = 0x78;
+        let cli_opcode = 0x58;
+        let program = vec![sei_opcode, cli_opcode, 0x00];
+        cpu.load_and_run(program);
+        let is_interrupt_disable_flag_set = cpu.status & 0b0000_0100 == 0b0000_0100;
+        assert_eq!(false, is_interrupt_disable_flag_set);
     }
 }
