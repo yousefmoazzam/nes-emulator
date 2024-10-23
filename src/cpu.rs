@@ -228,6 +228,7 @@ impl<'a> CPU<'a> {
                     self.program_counter += 1;
                 }
                 0xF8 => self.sed(),
+                0xD8 => self.cld(),
                 0x78 => self.sei(),
                 0xEA => continue,
                 _ => todo!(),
@@ -821,6 +822,11 @@ impl<'a> CPU<'a> {
     /// `SED` instruction
     fn sed(&mut self) {
         self.status |= 0b0000_1000;
+    }
+
+    /// `CLD` instruction
+    fn cld(&mut self) {
+        self.status &= 0b1111_0111;
     }
 
     /// `SEI` instruction
@@ -3021,6 +3027,18 @@ mod tests {
         cpu.load_and_run(program);
         let is_decimal_flag_set = cpu.status & 0b0000_1000 == 0b0000_1000;
         assert_eq!(true, is_decimal_flag_set);
+    }
+
+    #[test]
+    fn cld_clears_decimal_flag() {
+        let mut ram = [0x00; 0xFFFF];
+        let mut cpu = CPU::new(&mut ram);
+        let sed_opcode = 0xF8;
+        let cld_opcode = 0xD8;
+        let program = vec![sed_opcode, cld_opcode, 0x00];
+        cpu.load_and_run(program);
+        let is_decimal_flag_set = cpu.status & 0b0000_1000 == 0b0000_1000;
+        assert_eq!(false, is_decimal_flag_set);
     }
 
     #[test]
