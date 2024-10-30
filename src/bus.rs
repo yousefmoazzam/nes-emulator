@@ -8,7 +8,13 @@ impl<'a> Bus<'a> {
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {
-        self.ram[addr as usize]
+        // Zero out bits 12 and 13 to achieve the mapping of the following regions of addresses to
+        // the RAM array (often called "mirroring"):
+        // - [0x0800] to[0x0FFF]
+        // - [0x1000] to[0x17FF]
+        // - [0x1800] to[0x1FFF]
+        let mirrored_addr = addr & 0b0000_0111_1111_1111;
+        self.ram[mirrored_addr as usize]
     }
 
     /// Read `u16` value stored in little-endian format, from two contiguous memory addresses each
@@ -32,6 +38,18 @@ mod tests {
         ram[addr as usize] = value;
         let bus = Bus::new(&ram);
         let read_value = bus.mem_read(addr);
+        assert_eq!(value, read_value);
+    }
+
+    #[test]
+    fn mem_read_mirrored_address_returns_correct_value() {
+        let mut ram = [0x00; 2048];
+        let value = 0x15;
+        let addr = 0x0F;
+        let mirrored_addr = addr + 0x0800;
+        ram[addr as usize] = value;
+        let bus = Bus::new(&ram);
+        let read_value = bus.mem_read(mirrored_addr);
         assert_eq!(value, read_value);
     }
 
