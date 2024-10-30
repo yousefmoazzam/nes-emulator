@@ -1,9 +1,9 @@
 pub struct Bus<'a> {
-    ram: &'a [u8],
+    ram: &'a mut [u8],
 }
 
 impl<'a> Bus<'a> {
-    pub fn new(ram: &'a [u8]) -> Bus {
+    pub fn new(ram: &'a mut [u8]) -> Bus {
         Bus { ram }
     }
 
@@ -24,6 +24,10 @@ impl<'a> Bus<'a> {
         let hi = self.mem_read(pos + 1);
         u16::from_le_bytes([lo, hi])
     }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        self.ram[addr as usize] = data;
+    }
 }
 
 #[cfg(test)]
@@ -36,7 +40,7 @@ mod tests {
         let value = 0x15;
         let addr = 0x0F;
         ram[addr as usize] = value;
-        let bus = Bus::new(&ram);
+        let bus = Bus::new(&mut ram);
         let read_value = bus.mem_read(addr);
         assert_eq!(value, read_value);
     }
@@ -48,7 +52,7 @@ mod tests {
         let addr = 0x0F;
         let mirrored_addr = addr + 0x0800;
         ram[addr as usize] = value;
-        let bus = Bus::new(&ram);
+        let bus = Bus::new(&mut ram);
         let read_value = bus.mem_read(mirrored_addr);
         assert_eq!(value, read_value);
     }
@@ -62,8 +66,18 @@ mod tests {
         let addr = 0x24;
         ram[addr as usize] = lo;
         ram[(addr + 1) as usize] = hi;
-        let bus = Bus::new(&ram);
+        let bus = Bus::new(&mut ram);
         let read_value = bus.mem_read_u16(addr);
         assert_eq!(expected_value, read_value);
+    }
+
+    #[test]
+    fn mem_write_puts_correct_value_in_correct_place() {
+        let mut ram = [0x00; 2048];
+        let value = 0xFA;
+        let addr = 0x25;
+        let mut bus = Bus::new(&mut ram);
+        bus.mem_write(addr, value);
+        assert_eq!(value, bus.mem_read(addr));
     }
 }
