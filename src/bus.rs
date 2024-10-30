@@ -28,6 +28,13 @@ impl<'a> Bus<'a> {
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.ram[addr as usize] = data;
     }
+
+    /// Write `u16` value to two contiguous memory addresses, in little-endian format
+    pub fn mem_write_u16(&mut self, pos: u16, data: u16) {
+        let bytes = u16::to_le_bytes(data);
+        self.mem_write(pos, bytes[0]);
+        self.mem_write(pos + 1, bytes[1]);
+    }
 }
 
 #[cfg(test)]
@@ -79,5 +86,17 @@ mod tests {
         let mut bus = Bus::new(&mut ram);
         bus.mem_write(addr, value);
         assert_eq!(value, bus.mem_read(addr));
+    }
+
+    #[test]
+    fn mem_write_u16_puts_correct_value_in_correct_place() {
+        let mut ram = [0x00; 2048];
+        let lo = 0x05;
+        let hi = 0xFA;
+        let value = u16::from_le_bytes([lo, hi]);
+        let addr = 0x25;
+        let mut bus = Bus::new(&mut ram);
+        bus.mem_write_u16(addr, value);
+        assert_eq!(value, bus.mem_read_u16(addr));
     }
 }
