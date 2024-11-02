@@ -1,9 +1,11 @@
 static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-pub struct Rom {}
+pub struct Rom {
+    mapper: u8,
+}
 
 impl Rom {
-    pub fn new(data: &[u8]) {
+    pub fn new(data: &[u8]) -> Rom {
         let header_beginning_string = &data[0..4];
         if header_beginning_string != &HEADER_MAGIC_STRING[..] {
             panic!("Unexpected file format (missing 'NES^Z' string at beginning of header)");
@@ -19,6 +21,12 @@ impl Rom {
         if is_ines_version_two {
             panic!("iNES 2.0 isn't supprted");
         }
+
+        let mapper_lower_bits = &data[7] >> 4;
+        let mapper_upper_bits = &data[6] & 0b1111_0000;
+        let mapper = mapper_lower_bits | mapper_upper_bits;
+
+        Rom { mapper }
     }
 }
 
@@ -69,5 +77,24 @@ mod test {
         ];
         data.append(&mut bytes_after_magic_string);
         _ = Rom::new(&data[..]);
+    }
+
+    #[test]
+    fn set_mapper_type() {
+        let mut data = HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_1111;
+        let control_byte_two = 0b1111_0000;
+        let expected_mapper = 0b1111_1111;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        let rom = Rom::new(&data[..]);
+        assert_eq!(expected_mapper, rom.mapper);
     }
 }
