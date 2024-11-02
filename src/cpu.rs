@@ -1011,7 +1011,7 @@ mod tests {
         let lda_opcode = 0xA9;
         let sta_abs_addr_mode_opcode = 0x8D;
         let addr_lo = 0x00;
-        let addr_hi = 0x10;
+        let addr_hi = 0x01;
         let value = 0x23;
 
         // Program does the following:
@@ -1071,7 +1071,7 @@ mod tests {
     fn sty_absolute_addressing_stores_correct_value() {
         let mut ram = [0x00; 2048];
         let lo = 0x00;
-        let hi = 0x10;
+        let hi = 0x01;
         let value = 0x23;
 
         let bus = Bus::new(&mut ram);
@@ -1151,7 +1151,7 @@ mod tests {
     fn and_absolute_x_addressing_sets_correct_value() {
         let mut ram = [0x00; 2048];
         let lo = 0x00;
-        let hi = 0x10;
+        let hi = 0x01;
         let offset = 0x05;
         let register_a_value = 0b01100011;
         let memory_value = 0b10101110;
@@ -1192,7 +1192,7 @@ mod tests {
         let zero_page_addr = 0x10;
         let zero_page_addr_offset = 0x05;
         let lo = 0x15;
-        let hi = 0x20;
+        let hi = 0x01;
         let register_a_value = 0b00001010; // 10 in two's complement representation
         let memory_value = 0b00001000; // 8 in two's complement representation
 
@@ -1338,7 +1338,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let lo = 0x15;
-        let hi = 0x20;
+        let hi = 0x01;
         let lo_offset = 0x05;
         let memory_value = 0b0101_0101;
         let register_a_value = 0b0101_0101;
@@ -1384,7 +1384,7 @@ mod tests {
     fn ora_absolute_y_addressing_mode_sets_negative_flag() {
         let mut ram = [0x00; 2048];
         let lo = 0x1F;
-        let hi = 0x25;
+        let hi = 0x01;
         let offset = 0x10;
         let register_a_value = 0b1001_1001;
         let memory_value = 0b0110_0000;
@@ -1474,7 +1474,7 @@ mod tests {
     fn rts_enables_subroutine_to_execute_and_pops_stack_when_done() {
         let mut ram = [0x00; 2048];
         let subroutine_start_addr_lo = 0x1F;
-        let subroutine_start_addr_hi = 0x25;
+        let subroutine_start_addr_hi = 0x01;
         let subroutine_start_addr =
             u16::from_le_bytes([subroutine_start_addr_lo, subroutine_start_addr_hi]);
         let lda_immediate_addr_mode_opcode = 0xA9;
@@ -1688,7 +1688,7 @@ mod tests {
     fn bit_absolute_addressing_mode_sets_negative_flag() {
         let mut ram = [0x00; 2048];
         let lo = 0x10;
-        let hi = 0xA1;
+        let hi = 0x01;
         let memory_value = 0b1000_0000;
         ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
@@ -1709,9 +1709,9 @@ mod tests {
     fn bit_absolute_addressing_mode_clears_negative_flag() {
         let mut ram = [0x00; 2048];
         let lo_set = 0x10;
-        let hi_set = 0xA1;
+        let hi_set = 0x01;
         let lo_clear = 0x15;
-        let hi_clear = 0xA8;
+        let hi_clear = 0x02;
         let memory_value_set = 0b1000_0000;
         let memory_value_clear = 0b0100_0000;
         ram[u16::from_le_bytes([lo_set, hi_set]) as usize] = memory_value_set;
