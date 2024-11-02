@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn brk_flag_set() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let program = vec![0x00];
@@ -854,7 +854,7 @@ mod tests {
 
     #[test]
     fn lda_immediate_addressing() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_immediate_addressing_opcode = 0xA9;
@@ -866,7 +866,7 @@ mod tests {
 
     #[test]
     fn tax_sets_correct_value() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn tax_set_zero_flag() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let tax_opcode = 0xAA;
@@ -896,7 +896,7 @@ mod tests {
 
     #[test]
     fn tax_clear_zero_flag() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
@@ -915,7 +915,7 @@ mod tests {
 
     #[test]
     fn tax_set_negative_flag() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
@@ -934,7 +934,7 @@ mod tests {
 
     #[test]
     fn tax_clear_negative_flag() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
@@ -953,7 +953,7 @@ mod tests {
 
     #[test]
     fn inc_zero_page_addressing_mode_increments_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0x23;
         ram[zero_page_addr as usize] = memory_value;
@@ -971,7 +971,7 @@ mod tests {
 
     #[test]
     fn inx_increments_value_correctly() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let inx_opcode = 0xE8;
@@ -982,7 +982,7 @@ mod tests {
 
     #[test]
     fn iny_increments_register_y_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_y_value = 0x13;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -1005,7 +1005,7 @@ mod tests {
 
     #[test]
     fn sta_absolute_addressing_stores_correct_value() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
@@ -1033,7 +1033,7 @@ mod tests {
 
     #[test]
     fn stx_zero_page_y_addressing_stores_correct_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let offset = 0x05;
         let value = 0x23;
@@ -1069,7 +1069,7 @@ mod tests {
 
     #[test]
     fn sty_absolute_addressing_stores_correct_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo = 0x00;
         let hi = 0x10;
         let value = 0x23;
@@ -1098,7 +1098,7 @@ mod tests {
 
     #[test]
     fn ldx_zero_page_addressing_loads_correct_value() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let value = 0x23;
 
@@ -1119,7 +1119,7 @@ mod tests {
 
     #[test]
     fn ldy_zero_page_x_addressing_loads_correct_value() {
-        let mut ram: [u8; 0xFFFF] = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let offset = 0x05;
         let value = 0x23;
@@ -1149,7 +1149,7 @@ mod tests {
 
     #[test]
     fn and_absolute_x_addressing_sets_correct_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo = 0x00;
         let hi = 0x10;
         let offset = 0x05;
@@ -1188,7 +1188,7 @@ mod tests {
 
     #[test]
     fn cmp_indirect_x_addressing_sets_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let zero_page_addr_offset = 0x05;
         let lo = 0x15;
@@ -1231,7 +1231,7 @@ mod tests {
 
     #[test]
     fn cpx_immediate_addressing_sets_carry_flag_if_register_x_geq_to_memory_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 20u8;
         let memory_value = 15u8;
         let bus = Bus::new(&mut ram);
@@ -1257,7 +1257,7 @@ mod tests {
 
     #[test]
     fn cpx_immediate_addressing_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0x7F;
         let memory_value = 0x80;
         let bus = Bus::new(&mut ram);
@@ -1283,7 +1283,7 @@ mod tests {
 
     #[test]
     fn cpy_immediate_addressing_sets_carry_flag_if_register_x_geq_to_memory_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_y_value = 20u8;
         let memory_value = 15u8;
         let bus = Bus::new(&mut ram);
@@ -1309,7 +1309,7 @@ mod tests {
 
     #[test]
     fn cpy_immediate_addressing_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_y_value = 0x7F;
         let memory_value = 0x80;
         let bus = Bus::new(&mut ram);
@@ -1335,7 +1335,7 @@ mod tests {
 
     #[test]
     fn eor_indirect_y_addressing_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x10;
         let lo = 0x15;
         let hi = 0x20;
@@ -1382,7 +1382,7 @@ mod tests {
 
     #[test]
     fn ora_absolute_y_addressing_mode_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo = 0x1F;
         let hi = 0x25;
         let offset = 0x10;
@@ -1421,7 +1421,7 @@ mod tests {
 
     #[test]
     fn jmp_indirect_addressing_updates_program_counter_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo = 0x1F;
         let hi = 0x25;
         let bus = Bus::new(&mut ram);
@@ -1438,7 +1438,7 @@ mod tests {
 
     #[test]
     fn jsr_sets_stack_register_and_program_counter_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let lo = 0x1F;
         let hi = 0x25;
@@ -1472,7 +1472,7 @@ mod tests {
 
     #[test]
     fn rts_enables_subroutine_to_execute_and_pops_stack_when_done() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let subroutine_start_addr_lo = 0x1F;
         let subroutine_start_addr_hi = 0x25;
         let subroutine_start_addr =
@@ -1504,7 +1504,7 @@ mod tests {
 
     #[test]
     fn dec_zero_page_addressing_mode_modifies_value_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x25;
         let value = 0x05;
         ram[zero_page_addr as usize] = value;
@@ -1523,7 +1523,7 @@ mod tests {
 
     #[test]
     fn dex_decrements_register_x_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0x10;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -1546,7 +1546,7 @@ mod tests {
 
     #[test]
     fn dey_decrements_register_y_value() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_y_value = 0x10;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -1569,7 +1569,7 @@ mod tests {
 
     #[test]
     fn txs_transfers_register_x_value_to_stack_register() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0x04;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -1592,7 +1592,7 @@ mod tests {
 
     #[test]
     fn pha_pushes_register_a_value_onto_stack() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0x06;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -1619,7 +1619,7 @@ mod tests {
 
     #[test]
     fn tsx_transfers_stack_register_value_to_register_x() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let tsx_opcode = 0xBA;
@@ -1634,7 +1634,7 @@ mod tests {
 
     #[test]
     fn bit_zero_page_addressing_mode_sets_overflow_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x25;
         let memory_value = 0b0100_1000;
         ram[zero_page_addr as usize] = memory_value;
@@ -1654,7 +1654,7 @@ mod tests {
 
     #[test]
     fn bit_zero_page_addressing_mode_clears_overflow_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr_set = 0x25;
         let zero_page_addr_clear = 0x30;
         let memory_value_set = 0b0100_1000;
@@ -1686,7 +1686,7 @@ mod tests {
 
     #[test]
     fn bit_absolute_addressing_mode_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo = 0x10;
         let hi = 0xA1;
         let memory_value = 0b1000_0000;
@@ -1707,7 +1707,7 @@ mod tests {
 
     #[test]
     fn bit_absolute_addressing_mode_clears_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let lo_set = 0x10;
         let hi_set = 0xA1;
         let lo_clear = 0x15;
@@ -1743,7 +1743,7 @@ mod tests {
 
     #[test]
     fn bit_zero_page_addressing_mode_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0010_0100;
         let register_a_value = 0b1101_1011;
@@ -1772,7 +1772,7 @@ mod tests {
 
     #[test]
     fn bit_zero_page_addressing_mode_clears_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr_set = 0x15;
         let zero_page_addr_clear = 0x20;
         let memory_value_set = 0b0010_0100;
@@ -1809,7 +1809,7 @@ mod tests {
 
     #[test]
     fn beq_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
@@ -1839,7 +1839,7 @@ mod tests {
 
     #[test]
     fn sec_sets_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
@@ -1851,7 +1851,7 @@ mod tests {
 
     #[test]
     fn clc_clears_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
@@ -1869,7 +1869,7 @@ mod tests {
 
     #[test]
     fn bcs_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
@@ -1894,7 +1894,7 @@ mod tests {
 
     #[test]
     fn bcc_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
         let bus = Bus::new(&mut ram);
@@ -1916,7 +1916,7 @@ mod tests {
 
     #[test]
     fn bmi_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
         let register_a_value = -3i8;
@@ -1947,7 +1947,7 @@ mod tests {
 
     #[test]
     fn bpl_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
@@ -1970,7 +1970,7 @@ mod tests {
 
     #[test]
     fn bne_correctly_offsets_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
@@ -1993,7 +1993,7 @@ mod tests {
 
     #[test]
     fn rol_zero_page_addressing_mode_includes_carry_flag_in_modification() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
@@ -2019,7 +2019,7 @@ mod tests {
 
     #[test]
     fn rol_zero_page_addressing_mode_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
@@ -2038,7 +2038,7 @@ mod tests {
 
     #[test]
     fn rol_zero_page_addressing_mode_sets_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // bit 7 is set on original value
         ram[zero_page_addr as usize] = memory_value;
@@ -2057,7 +2057,7 @@ mod tests {
 
     #[test]
     fn rol_zero_page_addressing_mode_clears_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
@@ -2083,7 +2083,7 @@ mod tests {
 
     #[test]
     fn rol_zero_page_addressing_mode_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
@@ -2102,7 +2102,7 @@ mod tests {
 
     #[test]
     fn asl_zero_page_addressing_mode_modifies_value_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
@@ -2120,7 +2120,7 @@ mod tests {
 
     #[test]
     fn asl_zero_page_addressing_mode_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
@@ -2142,7 +2142,7 @@ mod tests {
     // register, so maybe some kind of merging of the tests is possible to remove duplication;
     // parametrisation maybe?
     fn asl_zero_page_addressing_mode_sets_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
@@ -2161,7 +2161,7 @@ mod tests {
 
     #[test]
     fn asl_zero_page_addressing_mode_clears_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
@@ -2187,7 +2187,7 @@ mod tests {
 
     #[test]
     fn asl_zero_page_addressing_mode_sets_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
@@ -2206,7 +2206,7 @@ mod tests {
 
     #[test]
     fn lsr_zero_page_addressing_mode_modifes_value_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
@@ -2224,7 +2224,7 @@ mod tests {
 
     #[test]
     fn lsr_zero_page_addressing_mode_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // logical right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
@@ -2243,7 +2243,7 @@ mod tests {
 
     #[test]
     fn lsr_zero_page_addressing_mode_sets_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
@@ -2262,7 +2262,7 @@ mod tests {
 
     #[test]
     fn lsr_zero_page_addressing_mode_clears_carry_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
@@ -2288,7 +2288,7 @@ mod tests {
 
     #[test]
     fn lsr_zero_page_addressing_mode_clears_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
@@ -2316,7 +2316,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_leaves_bit_seven_if_carry_flag_clear() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
@@ -2334,7 +2334,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_sets_bit_seven_if_carry_flag_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
@@ -2360,7 +2360,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_sets_zero_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
@@ -2379,7 +2379,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_sets_carry_flag_if_orig_bit_zero_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // bit 0 is set on original value
         ram[zero_page_addr as usize] = memory_value;
@@ -2398,7 +2398,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_clears_carry_flag_if_orig_bit_zero_clear() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
@@ -2424,7 +2424,7 @@ mod tests {
 
     #[test]
     fn ror_zero_page_addressing_mode_clears_negative_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
@@ -2452,7 +2452,7 @@ mod tests {
 
     #[test]
     fn php_pushes_status_flags_onto_stack() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b1000_0000;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2484,7 +2484,7 @@ mod tests {
 
     #[test]
     fn pla_sets_register_a_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0b1000_0000;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2514,7 +2514,7 @@ mod tests {
 
     #[test]
     fn plp_sets_status_flags_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0101;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2539,7 +2539,7 @@ mod tests {
 
     #[test]
     fn adc_immediate_addressing_mode_correct_value_when_carry_flag_clear() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
         let bus = Bus::new(&mut ram);
@@ -2564,7 +2564,7 @@ mod tests {
 
     #[test]
     fn adc_immediate_addressing_mode_correct_value_when_carry_flag_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
         let bus = Bus::new(&mut ram);
@@ -2592,7 +2592,7 @@ mod tests {
 
     #[test]
     fn adc_immediate_addressing_mode_sets_overflow_flag_two_positives_output_negative() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
         let bus = Bus::new(&mut ram);
@@ -2623,7 +2623,7 @@ mod tests {
 
     #[test]
     fn adc_immediate_addressing_mode_sets_overflow_flag_two_negatives_output_positive() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
         let bus = Bus::new(&mut ram);
@@ -2654,7 +2654,7 @@ mod tests {
 
     #[test]
     fn adc_immediate_addressing_mode_sets_carry_flag_if_unsigned_overflow() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 127u8;
         let memory_value = 129u8;
         let bus = Bus::new(&mut ram);
@@ -2685,7 +2685,7 @@ mod tests {
 
     #[test]
     fn sbc_immediate_addressing_mode_correct_value_when_carry_flag_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b0010_0000; // 32
         let memory_value = 0b0001_0110; // 22
         let bus = Bus::new(&mut ram);
@@ -2713,7 +2713,7 @@ mod tests {
 
     #[test]
     fn sbc_immediate_addr_mode_sets_overflow_flag_negative_subtract_positive_outputs_positive() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
         let bus = Bus::new(&mut ram);
@@ -2746,7 +2746,7 @@ mod tests {
 
     #[test]
     fn sbc_immediate_addr_mode_sets_overflow_flag_positive_subtract_negative_outputs_negative() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
         let bus = Bus::new(&mut ram);
@@ -2779,7 +2779,7 @@ mod tests {
 
     #[test]
     fn sbc_immediate_addressing_mode_clears_carry_flag_if_unsigned_underflow() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 63u8;
         let memory_value = 64u8;
         let bus = Bus::new(&mut ram);
@@ -2812,7 +2812,7 @@ mod tests {
 
     #[test]
     fn txa_sets_register_a_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let value = 0x13;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2830,7 +2830,7 @@ mod tests {
 
     #[test]
     fn tya_sets_register_a_value_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let value = 0x4A;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2848,7 +2848,7 @@ mod tests {
 
     #[test]
     fn tay_sets_register_y_value_correctly() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let value = 0x6B;
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
@@ -2866,7 +2866,7 @@ mod tests {
 
     #[test]
     fn bvc_doesnt_modify_program_counter_if_overflow_flag_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = 0x10;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
@@ -2902,7 +2902,7 @@ mod tests {
 
     #[test]
     fn bvc_offsets_program_counter_correctly_if_overflow_flag_clear() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
         let bus = Bus::new(&mut ram);
@@ -2925,7 +2925,7 @@ mod tests {
 
     #[test]
     fn bvs_doesnt_modify_program_counter_if_overflow_flag_clear() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
         let bus = Bus::new(&mut ram);
@@ -2946,7 +2946,7 @@ mod tests {
 
     #[test]
     fn bvs_offsets_program_counter_correctly_if_overflow_flag_set() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
@@ -2985,7 +2985,7 @@ mod tests {
 
     #[test]
     fn clv_clears_overflow_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
         let bus = Bus::new(&mut ram);
@@ -3014,7 +3014,7 @@ mod tests {
 
     #[test]
     fn nop_doesnt_affect_registers_or_flags() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let nop_opcode = 0xEA;
@@ -3043,7 +3043,7 @@ mod tests {
 
     #[test]
     fn rti_first_stack_pop_to_set_status_register() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0xFC;
         let status_flags = 0b1000_0001;
         let status_flags_stack_addr =
@@ -3078,7 +3078,7 @@ mod tests {
 
     #[test]
     fn rti_second_stack_pop_to_set_program_counter() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let register_x_value = 0xFC;
         let new_program_counter_lo = 0x15;
         let new_program_counter_hi = 0xAB;
@@ -3112,7 +3112,7 @@ mod tests {
 
     #[test]
     fn sed_sets_decimal_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
@@ -3124,7 +3124,7 @@ mod tests {
 
     #[test]
     fn cld_clears_decimal_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
@@ -3137,7 +3137,7 @@ mod tests {
 
     #[test]
     fn sei_sets_interrupt_disable_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
@@ -3149,7 +3149,7 @@ mod tests {
 
     #[test]
     fn cli_clears_interrupt_disable_flag() {
-        let mut ram = [0x00; 0xFFFF];
+        let mut ram = [0x00; 2048];
         let bus = Bus::new(&mut ram);
         let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
