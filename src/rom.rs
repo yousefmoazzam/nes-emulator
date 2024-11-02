@@ -1,7 +1,13 @@
 static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
+#[derive(Debug, PartialEq)]
+enum ScreenMirroring {
+    FourScreen,
+}
+
 pub struct Rom {
     mapper: u8,
+    screen_mirroring: ScreenMirroring,
 }
 
 impl Rom {
@@ -26,7 +32,17 @@ impl Rom {
         let mapper_upper_bits = &data[6] & 0b1111_0000;
         let mapper = mapper_lower_bits | mapper_upper_bits;
 
-        Rom { mapper }
+        let is_four_screen_mirroring = &data[6] & 0b0000_1000 != 0;
+        let screen_mirroring = if is_four_screen_mirroring {
+            ScreenMirroring::FourScreen
+        } else {
+            todo!()
+        };
+
+        Rom {
+            mapper,
+            screen_mirroring,
+        }
     }
 }
 
@@ -96,5 +112,24 @@ mod test {
         data.append(&mut bytes_after_magic_string);
         let rom = Rom::new(&data[..]);
         assert_eq!(expected_mapper, rom.mapper);
+    }
+
+    #[test]
+    fn set_four_screen_mirroring() {
+        let mut data = HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_1000;
+        let control_byte_two = 0b1111_0000;
+        let expected_screen_mirroring = ScreenMirroring::FourScreen;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        let rom = Rom::new(&data[..]);
+        assert_eq!(expected_screen_mirroring, rom.screen_mirroring);
     }
 }
