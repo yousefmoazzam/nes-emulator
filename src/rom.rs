@@ -14,6 +14,11 @@ impl Rom {
         if control_byte_two_bit_three_set & control_byte_two_bit_two_set {
             panic!("Invalid iNES format version configuration");
         }
+
+        let is_ines_version_two = control_byte_two_bit_three_set & !control_byte_two_bit_two_set;
+        if is_ines_version_two {
+            panic!("iNES 2.0 isn't supprted");
+        }
     }
 }
 
@@ -43,6 +48,24 @@ mod test {
             no_of_8kib_vrom_banks,
             control_byte_one,
             control_byte_two_with_invalid_ines_version,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        _ = Rom::new(&data[..]);
+    }
+
+    #[test]
+    #[should_panic(expected = "iNES 2.0 isn't supprted")]
+    fn panic_if_ines_version_two_is_specified() {
+        let mut data = HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_1111;
+        let control_byte_two_with_ines_version_two = 0b1111_1000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two_with_ines_version_two,
         ];
         data.append(&mut bytes_after_magic_string);
         _ = Rom::new(&data[..]);
