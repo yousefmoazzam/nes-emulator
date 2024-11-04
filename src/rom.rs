@@ -1,5 +1,6 @@
 static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 static HEADER_SIZE: usize = 16;
+static TRAINER_SECTION_SIZE: usize = 512;
 static PRG_ROM_PAGE_SIZE: usize = 0xFFFF;
 
 #[derive(Debug, PartialEq)]
@@ -46,8 +47,14 @@ impl Rom {
             (false, false) => ScreenMirroring::Horizontal,
         };
 
+        let includes_trainer_section = &data[6] & 0b0000_0100 != 0;
         let prg_rom_size = data[4] as usize * PRG_ROM_PAGE_SIZE;
-        let prg_rom_start = HEADER_SIZE;
+        let prg_rom_start = HEADER_SIZE
+            + if includes_trainer_section {
+                TRAINER_SECTION_SIZE
+            } else {
+                0
+            };
         let prg_rom_end = prg_rom_start + prg_rom_size;
         let prg_rom = data[prg_rom_start..prg_rom_end].to_vec();
 
@@ -113,7 +120,7 @@ mod test {
         let mut data = HEADER_MAGIC_STRING.to_vec();
         let no_of_16kib_rom_banks = 0x1;
         let no_of_8kib_vrom_banks = 0x1;
-        let control_byte_one = 0b1111_1111;
+        let control_byte_one = 0b1111_1011;
         let control_byte_two = 0b1111_0000;
         let expected_mapper = 0b1111_1111;
         let mut bytes_after_magic_string = vec![
@@ -231,6 +238,34 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
+        let program_rom_data = [0x01; 0xFFFF];
+        data.append(&mut program_rom_data.to_vec());
+        let rom = Rom::new(&data[..]);
+        assert_eq!(program_rom_data.len(), rom.prg_rom.len());
+        assert_eq!(&program_rom_data[..], &rom.prg_rom[..]);
+    }
+
+    #[test]
+    fn program_rom_size_and_contents_with_trainer_section() {
+        let mut data = HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_0100;
+        let control_byte_two = 0b1111_0000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        // TODO: In addition to the reserved six bytes at the end of the header being zero, also
+        // makes the PRG RAM byte and the unknown byte after that, be zero. Find out how to set
+        // these two bytes properly at some point.
+        let reserved_empty_bytes = [0x00; 8];
+        data.append(&mut reserved_empty_bytes.to_vec());
+        let trainer_section = [0x00; 512];
+        data.append(&mut trainer_section.to_vec());
         let program_rom_data = [0x01; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
