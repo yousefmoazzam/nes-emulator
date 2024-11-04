@@ -2,6 +2,7 @@ static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 static HEADER_SIZE: usize = 16;
 static TRAINER_SECTION_SIZE: usize = 512;
 static PRG_ROM_PAGE_SIZE: usize = 0xFFFF;
+static CHR_ROM_PAGE_SIZE: usize = 0x1FFF;
 
 #[derive(Debug, PartialEq)]
 enum ScreenMirroring {
@@ -14,6 +15,7 @@ pub struct Rom {
     mapper: u8,
     screen_mirroring: ScreenMirroring,
     prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
 }
 
 impl Rom {
@@ -58,10 +60,16 @@ impl Rom {
         let prg_rom_end = prg_rom_start + prg_rom_size;
         let prg_rom = data[prg_rom_start..prg_rom_end].to_vec();
 
+        let chr_rom_size = data[4] as usize * CHR_ROM_PAGE_SIZE;
+        let chr_rom_start = prg_rom_end;
+        let chr_rom_end = chr_rom_start + chr_rom_size;
+        let chr_rom = data[chr_rom_start..chr_rom_end].to_vec();
+
         Rom {
             mapper,
             screen_mirroring,
             prg_rom,
+            chr_rom,
         }
     }
 }
@@ -137,6 +145,8 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let program_rom_data = [0x00; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(expected_mapper, rom.mapper);
     }
@@ -163,6 +173,8 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let program_rom_data = [0x00; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(expected_screen_mirroring, rom.screen_mirroring);
     }
@@ -189,6 +201,8 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let program_rom_data = [0x00; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(expected_screen_mirroring, rom.screen_mirroring);
     }
@@ -215,6 +229,8 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let program_rom_data = [0x00; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(expected_screen_mirroring, rom.screen_mirroring);
     }
@@ -240,6 +256,8 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let program_rom_data = [0x01; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(program_rom_data.len(), rom.prg_rom.len());
         assert_eq!(&program_rom_data[..], &rom.prg_rom[..]);
@@ -268,8 +286,38 @@ mod test {
         data.append(&mut trainer_section.to_vec());
         let program_rom_data = [0x01; 0xFFFF];
         data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
         let rom = Rom::new(&data[..]);
         assert_eq!(program_rom_data.len(), rom.prg_rom.len());
         assert_eq!(&program_rom_data[..], &rom.prg_rom[..]);
+    }
+
+    #[test]
+    fn chr_rom_size_and_contents() {
+        let mut data = HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_0000;
+        let control_byte_two = 0b1111_0000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        // TODO: In addition to the reserved six bytes at the end of the header being zero, also
+        // makes the PRG RAM byte and the unknown byte after that, be zero. Find out how to set
+        // these two bytes properly at some point.
+        let reserved_empty_bytes = [0x00; 8];
+        data.append(&mut reserved_empty_bytes.to_vec());
+        let program_rom_data = [0x00; 0xFFFF];
+        data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
+        let rom = Rom::new(&data[..]);
+        assert_eq!(chr_rom_data.len(), rom.chr_rom.len());
+        assert_eq!(&chr_rom_data[..], &rom.chr_rom[..]);
     }
 }
