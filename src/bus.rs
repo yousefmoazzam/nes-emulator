@@ -1,10 +1,13 @@
+use crate::rom::Rom;
+
 pub struct Bus<'a> {
     ram: &'a mut [u8],
+    rom: Rom,
 }
 
 impl<'a> Bus<'a> {
-    pub fn new(ram: &'a mut [u8]) -> Bus {
-        Bus { ram }
+    pub fn new(ram: &'a mut [u8], rom: Rom) -> Bus {
+        Bus { ram, rom }
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {
@@ -47,13 +50,42 @@ impl<'a> Bus<'a> {
 mod tests {
     use super::*;
 
+    // TODO: Duplicate of private binding in `rom.rs`, think about if that should be made public
+    // for being reusable in this test module or not (or do something better)
+    static ROM_HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+
+    fn create_rom() -> Rom {
+        let mut data = ROM_HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_0000;
+        let control_byte_two = 0b1111_0000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        // TODO: In addition to the reserved six bytes at the end of the header being zero, also
+        // makes the PRG RAM byte and the unknown byte after that, be zero. Find out how to set
+        // these two bytes properly at some point.
+        let reserved_empty_bytes = [0x00; 8];
+        data.append(&mut reserved_empty_bytes.to_vec());
+        let program_rom_data = [0x00; 0xFFFF];
+        data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
+        Rom::new(&data[..])
+    }
+
     #[test]
     fn mem_read_returns_correct_value() {
         let mut ram = [0x00; 2048];
         let value = 0x15;
         let addr = 0x0F;
         ram[addr as usize] = value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let read_value = bus.mem_read(addr);
         assert_eq!(value, read_value);
     }
@@ -65,7 +97,7 @@ mod tests {
         let addr = 0x0F;
         let mirrored_addr = addr + 0x0800;
         ram[addr as usize] = value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let read_value = bus.mem_read(mirrored_addr);
         assert_eq!(value, read_value);
     }
@@ -79,7 +111,7 @@ mod tests {
         let addr = 0x24;
         ram[addr as usize] = lo;
         ram[(addr + 1) as usize] = hi;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let read_value = bus.mem_read_u16(addr);
         assert_eq!(expected_value, read_value);
     }
@@ -89,7 +121,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let value = 0xFA;
         let addr = 0x25;
-        let mut bus = Bus::new(&mut ram);
+        let mut bus = Bus::new(&mut ram, create_rom());
         bus.mem_write(addr, value);
         assert_eq!(value, bus.mem_read(addr));
     }
@@ -100,7 +132,7 @@ mod tests {
         let value = 0xFA;
         let addr = 0x25;
         let mirrored_addr = addr + 0x0800;
-        let mut bus = Bus::new(&mut ram);
+        let mut bus = Bus::new(&mut ram, create_rom());
         bus.mem_write(mirrored_addr, value);
         assert_eq!(value, bus.mem_read(addr));
     }
@@ -112,7 +144,7 @@ mod tests {
         let hi = 0xFA;
         let value = u16::from_le_bytes([lo, hi]);
         let addr = 0x25;
-        let mut bus = Bus::new(&mut ram);
+        let mut bus = Bus::new(&mut ram, create_rom());
         bus.mem_write_u16(addr, value);
         assert_eq!(value, bus.mem_read_u16(addr));
     }

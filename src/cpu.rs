@@ -839,12 +839,43 @@ impl<'a> CPU<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::rom::Rom;
+
     use super::*;
+
+    // TODO: Duplicate of private binding in `rom.rs`, think about if that should be made public
+    // for being reusable in this test module or not (or do something better)
+    static ROM_HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+
+    fn create_rom() -> Rom {
+        let mut data = ROM_HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_0000;
+        let control_byte_two = 0b1111_0000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        // TODO: In addition to the reserved six bytes at the end of the header being zero, also
+        // makes the PRG RAM byte and the unknown byte after that, be zero. Find out how to set
+        // these two bytes properly at some point.
+        let reserved_empty_bytes = [0x00; 8];
+        data.append(&mut reserved_empty_bytes.to_vec());
+        let program_rom_data = [0x00; 0xFFFF];
+        data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
+        Rom::new(&data[..])
+    }
 
     #[test]
     fn brk_flag_set() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let program = vec![0x00];
         cpu.load_and_run(program);
@@ -855,7 +886,7 @@ mod tests {
     #[test]
     fn lda_immediate_addressing() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addressing_opcode = 0xA9;
         let value_to_load = 0x05 as u8;
@@ -867,7 +898,7 @@ mod tests {
     #[test]
     fn tax_sets_correct_value() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
@@ -880,7 +911,7 @@ mod tests {
     #[test]
     fn tax_set_zero_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let tax_opcode = 0xAA;
 
@@ -897,7 +928,7 @@ mod tests {
     #[test]
     fn tax_clear_zero_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
@@ -916,7 +947,7 @@ mod tests {
     #[test]
     fn tax_set_negative_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
@@ -935,7 +966,7 @@ mod tests {
     #[test]
     fn tax_clear_negative_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
@@ -957,7 +988,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0x23;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let inc_zero_page_addr_mode_opcode = 0xE6;
 
@@ -972,7 +1003,7 @@ mod tests {
     #[test]
     fn inx_increments_value_correctly() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let inx_opcode = 0xE8;
         let program = vec![inx_opcode, 0x00];
@@ -984,7 +1015,7 @@ mod tests {
     fn iny_increments_register_y_value() {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x13;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let iny_zero_page_addr_mode_opcode = 0xC8;
@@ -1006,7 +1037,7 @@ mod tests {
     #[test]
     fn sta_absolute_addressing_stores_correct_value() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let sta_abs_addr_mode_opcode = 0x8D;
@@ -1041,7 +1072,7 @@ mod tests {
         // Write `value` into `zero_page_addr + offset` in the `ram` array
         ram[(zero_page_addr + offset) as usize] = value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let ldx_immediate_addr_mode_opcode = 0xA2;
@@ -1074,7 +1105,7 @@ mod tests {
         let hi = 0x01;
         let value = 0x23;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_opcode = 0xA0;
         let sty_absolute_addr_mode_opcode = 0x8C;
@@ -1105,7 +1136,7 @@ mod tests {
         // Write `value` into `zero_page_addr` in the `ram` array
         ram[zero_page_addr as usize] = value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_zero_page_addr_mode_opcode = 0xA6;
 
@@ -1127,7 +1158,7 @@ mod tests {
         // Write `value` into `zero_page_addr + offset` in the `ram` array
         ram[(zero_page_addr + offset) as usize] = value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let ldy_zero_page_x_addr_mode_opcode = 0xB4;
@@ -1160,7 +1191,7 @@ mod tests {
         let addr_16bit = u16::from_le_bytes([lo, hi]) + offset as u16;
         ram[addr_16bit as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let ldx_immediate_addr_mode_opcode = 0xA2;
@@ -1204,7 +1235,7 @@ mod tests {
         // Write value to target address
         ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let ldx_immediate_addr_mode_opcode = 0xA2;
@@ -1234,7 +1265,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_x_value = 20u8;
         let memory_value = 15u8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let cpx_immediate_addr_mode_opcode = 0xE0;
@@ -1260,7 +1291,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x7F;
         let memory_value = 0x80;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let cpx_immediate_addr_mode_opcode = 0xE0;
@@ -1286,7 +1317,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_y_value = 20u8;
         let memory_value = 15u8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let cpy_immediate_addr_mode_opcode = 0xC0;
@@ -1312,7 +1343,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x7F;
         let memory_value = 0x80;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let cpy_immediate_addr_mode_opcode = 0xC0;
@@ -1355,7 +1386,7 @@ mod tests {
         // + offset`, most significant byte given by `hi`)
         ram[u16::from_le_bytes([lo + lo_offset, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let ldy_immediate_addr_mode_opcode = 0xA0;
@@ -1393,7 +1424,7 @@ mod tests {
         // by `lo` and `hi`
         ram[(u16::from_le_bytes([lo, hi]) + offset as u16) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addressing_opcode = 0xA9;
         let ldy_immediate_addr_mode_opcode = 0xA0;
@@ -1424,7 +1455,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let lo = 0x1F;
         let hi = 0x25;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let jmp_indirect_addr_mode_opcode = 0x6C;
 
@@ -1442,7 +1473,7 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let lo = 0x1F;
         let hi = 0x25;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let jsr_absolute_addr_mode_opcode = 0x20;
 
@@ -1483,7 +1514,7 @@ mod tests {
         ram[subroutine_start_addr as usize] = lda_immediate_addr_mode_opcode;
         ram[(subroutine_start_addr + 1) as usize] = register_a_value;
         ram[(subroutine_start_addr + 2) as usize] = rts_opcode;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let jsr_absolute_addr_mode_opcode = 0x20;
 
@@ -1509,7 +1540,7 @@ mod tests {
         let value = 0x05;
         ram[zero_page_addr as usize] = value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let dec_zero_page_addr_mode_opcode = 0xC6;
 
@@ -1525,7 +1556,7 @@ mod tests {
     fn dex_decrements_register_x_value() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x10;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let dex_opcode = 0xCA;
@@ -1548,7 +1579,7 @@ mod tests {
     fn dey_decrements_register_y_value() {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x10;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let dey_opcode = 0x88;
@@ -1571,7 +1602,7 @@ mod tests {
     fn txs_transfers_register_x_value_to_stack_register() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x04;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let txs_opcode = 0x9A;
@@ -1594,7 +1625,7 @@ mod tests {
     fn pha_pushes_register_a_value_onto_stack() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x06;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addressing_opcode = 0xA9;
         let pha_opcode = 0x048;
@@ -1620,7 +1651,7 @@ mod tests {
     #[test]
     fn tsx_transfers_stack_register_value_to_register_x() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let tsx_opcode = 0xBA;
 
@@ -1639,7 +1670,7 @@ mod tests {
         let memory_value = 0b0100_1000;
         ram[zero_page_addr as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bit_zero_page_addr_mode_opcode = 0x24;
 
@@ -1662,7 +1693,7 @@ mod tests {
         ram[zero_page_addr_set as usize] = memory_value_set;
         ram[zero_page_addr_clear as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bit_zero_page_addr_mode_opcode = 0x24;
 
@@ -1692,7 +1723,7 @@ mod tests {
         let memory_value = 0b1000_0000;
         ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bit_absolute_addr_mode_opcode = 0x2C;
 
@@ -1717,7 +1748,7 @@ mod tests {
         ram[u16::from_le_bytes([lo_set, hi_set]) as usize] = memory_value_set;
         ram[u16::from_le_bytes([lo_clear, hi_clear]) as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bit_absolute_addr_mode_opcode = 0x2C;
 
@@ -1749,7 +1780,7 @@ mod tests {
         let register_a_value = 0b1101_1011;
         ram[zero_page_addr as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let bit_zero_page_addr_mode_opcode = 0x24;
@@ -1781,7 +1812,7 @@ mod tests {
         ram[zero_page_addr_set as usize] = memory_value_set;
         ram[zero_page_addr_clear as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let bit_zero_page_addr_mode_opcode = 0x24;
@@ -1813,7 +1844,7 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let beq_opcode = 0xF0;
@@ -1840,7 +1871,7 @@ mod tests {
     #[test]
     fn sec_sets_carry_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let program = vec![sec_opcode, 0x00];
@@ -1852,7 +1883,7 @@ mod tests {
     #[test]
     fn clc_clears_carry_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let clc_opcode = 0x18;
@@ -1873,7 +1904,7 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let bcs_opcode = 0xB0;
@@ -1897,7 +1928,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bcc_opcode = 0x90;
 
@@ -1921,7 +1952,7 @@ mod tests {
         let offset = -6i8;
         let register_a_value = -3i8;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let bmi_opcode = 0x30;
@@ -1951,7 +1982,7 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bpl_opcode = 0x10;
 
@@ -1974,7 +2005,7 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bne_opcode = 0xD0;
 
@@ -1997,7 +2028,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let rol_zero_page_addr_mode_opcode = 0x26;
@@ -2023,7 +2054,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let rol_zero_page_addr_mode_opcode = 0x26;
 
@@ -2042,7 +2073,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // bit 7 is set on original value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let rol_zero_page_addr_mode_opcode = 0x26;
 
@@ -2061,7 +2092,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let rol_zero_page_addr_mode_opcode = 0x26;
@@ -2087,7 +2118,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let rol_zero_page_addr_mode_opcode = 0x26;
 
@@ -2106,7 +2137,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let asl_zero_page_addr_mode_opcode = 0x06;
 
@@ -2124,7 +2155,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let asl_zero_page_addr_mode_opcode = 0x06;
 
@@ -2146,7 +2177,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let asl_zero_page_addr_mode_opcode = 0x06;
 
@@ -2165,7 +2196,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let asl_zero_page_addr_mode_opcode = 0x06;
@@ -2191,7 +2222,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let asl_zero_page_addr_mode_opcode = 0x06;
 
@@ -2210,7 +2241,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lsr_zero_page_addr_mode_opcode = 0x46;
 
@@ -2228,7 +2259,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // logical right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lsr_zero_page_addr_mode_opcode = 0x46;
 
@@ -2247,7 +2278,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lsr_zero_page_addr_mode_opcode = 0x46;
 
@@ -2266,7 +2297,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let lsr_zero_page_addr_mode_opcode = 0x46;
@@ -2293,7 +2324,7 @@ mod tests {
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let lsr_zero_page_addr_mode_opcode = 0x46;
@@ -2320,7 +2351,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ror_zero_page_addr_mode_opcode = 0x66;
 
@@ -2338,7 +2369,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let ror_zero_page_addr_mode_opcode = 0x66;
@@ -2364,7 +2395,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ror_zero_page_addr_mode_opcode = 0x66;
 
@@ -2383,7 +2414,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // bit 0 is set on original value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ror_zero_page_addr_mode_opcode = 0x66;
 
@@ -2402,7 +2433,7 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let ror_zero_page_addr_mode_opcode = 0x66;
@@ -2429,7 +2460,7 @@ mod tests {
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let ror_zero_page_addr_mode_opcode = 0x66;
@@ -2454,7 +2485,7 @@ mod tests {
     fn php_pushes_status_flags_onto_stack() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1000_0000;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2486,7 +2517,7 @@ mod tests {
     fn pla_sets_register_a_correctly() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0b1000_0000;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let sec_opcode = 0x38;
@@ -2516,7 +2547,7 @@ mod tests {
     fn plp_sets_status_flags_correctly() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0101;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let pha_opcode = 0x48;
@@ -2542,7 +2573,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2567,7 +2598,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2595,7 +2626,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2626,7 +2657,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2657,7 +2688,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 127u8;
         let memory_value = 129u8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2688,7 +2719,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0010_0000; // 32
         let memory_value = 0b0001_0110; // 22
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2716,7 +2747,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2749,7 +2780,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2782,7 +2813,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 63u8;
         let memory_value = 64u8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let sec_opcode = 0x38;
@@ -2814,7 +2845,7 @@ mod tests {
     fn txa_sets_register_a_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x13;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let txa_opcode = 0x8A;
@@ -2832,7 +2863,7 @@ mod tests {
     fn tya_sets_register_a_value_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x4A;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldy_immediate_addr_mode_opcode = 0xA0;
         let tya_opcode = 0x98;
@@ -2850,7 +2881,7 @@ mod tests {
     fn tay_sets_register_y_value_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x6B;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let tay_opcode = 0xA8;
@@ -2871,7 +2902,7 @@ mod tests {
         let offset = 0x10;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2905,7 +2936,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bvc_opcode = 0x50;
 
@@ -2928,7 +2959,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let bvs_opcode = 0x70;
 
@@ -2951,7 +2982,7 @@ mod tests {
         let offset = -16i8;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -2988,7 +3019,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let lda_immediate_addr_mode_opcode = 0xA9;
         let adc_immediate_addr_mode_opcode = 0x69;
@@ -3015,7 +3046,7 @@ mod tests {
     #[test]
     fn nop_doesnt_affect_registers_or_flags() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let nop_opcode = 0xEA;
 
@@ -3049,7 +3080,7 @@ mod tests {
         let status_flags_stack_addr =
             u16::from_le_bytes([STACK_REGISTER_LO_START - 2, STACK_REGISTER_HI]);
         ram[status_flags_stack_addr as usize] = status_flags;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let txs_opcode = 0x9A;
@@ -3088,7 +3119,7 @@ mod tests {
             new_program_counter_hi;
         ram[(u16::from_le_bytes([STACK_REGISTER_LO_START - 1, STACK_REGISTER_HI])) as usize] =
             new_program_counter_lo;
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let ldx_immediate_addr_mode_opcode = 0xA2;
         let txs_opcode = 0x9A;
@@ -3113,7 +3144,7 @@ mod tests {
     #[test]
     fn sed_sets_decimal_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
         let program = vec![sed_opcode, 0x00];
@@ -3125,7 +3156,7 @@ mod tests {
     #[test]
     fn cld_clears_decimal_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
         let cld_opcode = 0xD8;
@@ -3138,7 +3169,7 @@ mod tests {
     #[test]
     fn sei_sets_interrupt_disable_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
         let program = vec![sei_opcode, 0x00];
@@ -3150,7 +3181,7 @@ mod tests {
     #[test]
     fn cli_clears_interrupt_disable_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram);
+        let bus = Bus::new(&mut ram, create_rom());
         let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
         let cli_opcode = 0x58;
