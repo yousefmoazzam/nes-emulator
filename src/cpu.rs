@@ -1857,7 +1857,7 @@ mod tests {
     fn beq_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
 
         // Program does the following:
         // - load zero value into register A (so then the zero flag is set)
@@ -1918,7 +1918,7 @@ mod tests {
     fn bcs_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
 
         // Program does the following:
         // - set carry flag
@@ -1943,7 +1943,7 @@ mod tests {
     fn bcc_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
 
         // Program does the following:
         // - execute BCC instruction (which does non-trivial action if carry flag is clear)
@@ -1966,7 +1966,7 @@ mod tests {
     fn bmi_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
         let register_a_value = -3i8;
 
         // Program does the following:
@@ -1997,7 +1997,7 @@ mod tests {
     fn bpl_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
 
         // Program does the following:
         // - execute BPL instruction (which does non-trivial action if negative flag is clear)
@@ -2020,7 +2020,7 @@ mod tests {
     fn bne_correctly_offsets_program_counter() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -6i8;
+        let offset = 6i8;
 
         // Program does the following:
         // - execute BNE instruction (which does non-trivial action if zero flag is clear)
@@ -2989,7 +2989,7 @@ mod tests {
     fn bvc_offsets_program_counter_correctly_if_overflow_flag_clear() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -16i8;
+        let offset = 16i8;
 
         // Program does the following:
         // - execute BVC instruction
@@ -3035,7 +3035,7 @@ mod tests {
     fn bvs_offsets_program_counter_correctly_if_overflow_flag_set() {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
-        let offset = -16i8;
+        let offset = 16i8;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
 
