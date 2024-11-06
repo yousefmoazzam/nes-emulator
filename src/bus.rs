@@ -1,5 +1,10 @@
 use crate::rom::Rom;
 
+const RAM_SPACE_START: u16 = 0x0000;
+const RAM_MIRRORS_SPACE_END: u16 = 0x1FFF;
+const ROM_SPACE_START: u16 = 0x8000;
+const ROM_SPACE_END: u16 = 0xFFFF;
+
 pub struct Bus<'a> {
     ram: &'a mut [u8],
     rom: Rom,
@@ -10,14 +15,25 @@ impl<'a> Bus<'a> {
         Bus { ram, rom }
     }
 
+    fn read_prg_rom(&self, addr: u16) -> u8 {
+        let offsetted_addr = addr - 0x8000;
+        self.rom.prg_rom[offsetted_addr as usize]
+    }
+
     pub fn mem_read(&self, addr: u16) -> u8 {
-        // Zero out bits 12 and 13 to achieve the mapping of the following regions of addresses to
-        // the RAM array (often called "mirroring"):
-        // - [0x0800] to[0x0FFF]
-        // - [0x1000] to[0x17FF]
-        // - [0x1800] to[0x1FFF]
-        let mirrored_addr = addr & 0b0000_0111_1111_1111;
-        self.ram[mirrored_addr as usize]
+        match addr {
+            RAM_SPACE_START..=RAM_MIRRORS_SPACE_END => {
+                // Zero out bits 12 and 13 to achieve the mapping of the following regions of addresses to
+                // the RAM array (often called "mirroring"):
+                // - [0x0800] to[0x0FFF]
+                // - [0x1000] to[0x17FF]
+                // - [0x1800] to[0x1FFF]
+                let mirrored_addr = addr & 0b0000_0111_1111_1111;
+                self.ram[mirrored_addr as usize]
+            }
+            ROM_SPACE_START..=ROM_SPACE_END => self.read_prg_rom(addr),
+            _ => todo!(),
+        }
     }
 
     /// Read `u16` value stored in little-endian format, from two contiguous memory addresses each
@@ -29,13 +45,18 @@ impl<'a> Bus<'a> {
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
-        // Zero out bits 12 and 13 to achieve the mapping of the following regions of addresses to
-        // the RAM array (often called "mirroring"):
-        // - [0x0800] to[0x0FFF]
-        // - [0x1000] to[0x17FF]
-        // - [0x1800] to[0x1FFF]
-        let mirrored_addr = addr & 0b0000_0111_1111_1111;
-        self.ram[mirrored_addr as usize] = data;
+        match addr {
+            RAM_SPACE_START..=RAM_MIRRORS_SPACE_END => {
+                // Zero out bits 12 and 13 to achieve the mapping of the following regions of addresses to
+                // the RAM array (often called "mirroring"):
+                // - [0x0800] to[0x0FFF]
+                // - [0x1000] to[0x17FF]
+                // - [0x1800] to[0x1FFF]
+                let mirrored_addr = addr & 0b0000_0111_1111_1111;
+                self.ram[mirrored_addr as usize] = data;
+            }
+            _ => todo!(),
+        }
     }
 
     /// Write `u16` value to two contiguous memory addresses, in little-endian format

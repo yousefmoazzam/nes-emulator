@@ -14,7 +14,7 @@ enum ScreenMirroring {
 pub struct Rom {
     mapper: u8,
     screen_mirroring: ScreenMirroring,
-    prg_rom: Vec<u8>,
+    pub prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
 }
 

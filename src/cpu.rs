@@ -40,8 +40,7 @@ impl<'a> CPU<'a> {
         }
     }
 
-    pub fn load_and_run(&mut self, program: Vec<u8>) {
-        self.load(program);
+    pub fn load_and_run(&mut self) {
         self.reset();
         self.run();
     }
@@ -68,14 +67,6 @@ impl<'a> CPU<'a> {
         self.register_y = 0;
         self.status = 0b0010_0000;
         self.program_counter = self.mem_read_u16(PROGRAM_ROM_START_ADDR);
-    }
-
-    fn load(&mut self, program: Vec<u8>) {
-        let program_rom_start: u16 = 0x8000;
-        for (i, byte) in program.iter().enumerate() {
-            self.bus.mem_write(program_rom_start + i as u16, *byte);
-        }
-        self.mem_write_u16(PROGRAM_ROM_START_ADDR, program_rom_start);
     }
 
     fn run(&mut self) {
@@ -846,8 +837,9 @@ mod tests {
     // TODO: Duplicate of private binding in `rom.rs`, think about if that should be made public
     // for being reusable in this test module or not (or do something better)
     static ROM_HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+    static PRG_ROM_PAGE_SIZE: usize = 0x8000;
 
-    fn create_rom() -> Rom {
+    fn create_rom(program_data: &[u8]) -> Rom {
         let mut data = ROM_HEADER_MAGIC_STRING.to_vec();
         let no_of_16kib_rom_banks = 0x1;
         let no_of_8kib_vrom_banks = 0x1;
@@ -865,7 +857,12 @@ mod tests {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0xFFFF];
+        let mut program_rom_data = vec![0; PRG_ROM_PAGE_SIZE - 6];
+        program_rom_data[0..program_data.len()].copy_from_slice(&program_data[..]);
+        let initial_addr_lo = 0x00;
+        let initial_addr_hi = 0x80;
+        let interrupt_vectors = vec![0x0, 0x0, initial_addr_lo, initial_addr_hi, 0x0, 0x0];
+        program_rom_data.append(&mut interrupt_vectors.to_vec());
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -875,10 +872,10 @@ mod tests {
     #[test]
     fn brk_flag_set() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let program = vec![0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_brk_flag_set = cpu.status & 0b001_0000 == 0b0001_0000;
         assert_eq!(is_brk_flag_set, true);
     }
@@ -886,41 +883,42 @@ mod tests {
     #[test]
     fn lda_immediate_addressing() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let lda_immediate_addressing_opcode = 0xA9;
         let value_to_load = 0x05 as u8;
         let program = vec![lda_immediate_addressing_opcode, value_to_load, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         assert_eq!(cpu.register_a, value_to_load);
     }
 
     #[test]
     fn tax_sets_correct_value() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let lda_opcode = 0xA9;
         let tax_opcode = 0xAA;
         let value_to_load = 0x05;
         let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         assert_eq!(cpu.register_x, value_to_load);
     }
 
     #[test]
     fn tax_set_zero_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let tax_opcode = 0xAA;
 
         // Program does the following:
         // - load the value representing 0 that is in register X into register A (zero flag should
         // be set)
         // - break
+        let tax_opcode = 0xAA;
         let program = vec![tax_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -928,18 +926,19 @@ mod tests {
     #[test]
     fn tax_clear_zero_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_opcode = 0xA9;
-        let tax_opcode = 0xAA;
-        let value_to_load = 0x04;
 
         // Program does the following:
         // - load the value representing 4 into register A (zero flag should be cleared)
         // - transfer 4 stored in register A to register X (zero flag should stay cleared)
         // - break
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let value_to_load = 0x04;
         let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, false);
     }
@@ -947,18 +946,19 @@ mod tests {
     #[test]
     fn tax_set_negative_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_opcode = 0xA9;
-        let tax_opcode = 0xAA;
-        let negative_value = 0b1000_0000; // -128 in two's complement representation
 
         // Program does the following:
         // - load the value representing -1 into register A (negative flag should be set)
         // - transfer -1 stored in register A to register X (negative flag should stay set)
         // - break
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let negative_value = 0b1000_0000; // -128 in two's complement representation
         let program = vec![lda_opcode, negative_value, tax_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -966,18 +966,19 @@ mod tests {
     #[test]
     fn tax_clear_negative_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_opcode = 0xA9;
-        let tax_opcode = 0xAA;
-        let value_to_load = 0x04;
 
         // Program does the following:
         // - load the value representing 4 into register A (negative flag should be cleared)
         // - transfer 4 stored in register A to register X (negative flag should stay cleared)
         // - break
+        let lda_opcode = 0xA9;
+        let tax_opcode = 0xAA;
+        let value_to_load = 0x04;
         let program = vec![lda_opcode, value_to_load, tax_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
     }
@@ -988,26 +989,27 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0x23;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let inc_zero_page_addr_mode_opcode = 0xE6;
 
         // Program does the following:
         // - execute INC instruction on memory address containing value
         // - break
+        let inc_zero_page_addr_mode_opcode = 0xE6;
         let program = vec![inc_zero_page_addr_mode_opcode, zero_page_addr];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(memory_value + 1, ram[zero_page_addr as usize]);
     }
 
     #[test]
     fn inx_increments_value_correctly() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let inx_opcode = 0xE8;
         let program = vec![inx_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         assert_eq!(cpu.register_x, 0x01);
     }
 
@@ -1015,40 +1017,39 @@ mod tests {
     fn iny_increments_register_y_value() {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x13;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let iny_zero_page_addr_mode_opcode = 0xC8;
 
         // Program does the following:
         // - load value into register Y
         // - execute INY instruction
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let iny_zero_page_addr_mode_opcode = 0xC8;
         let program = vec![
             ldy_immediate_addr_mode_opcode,
             register_y_value,
             iny_zero_page_addr_mode_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_y_value + 1, cpu.register_y);
     }
 
     #[test]
     fn sta_absolute_addressing_stores_correct_value() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_opcode = 0xA9;
-        let sta_abs_addr_mode_opcode = 0x8D;
-        let addr_lo = 0x00;
-        let addr_hi = 0x01;
-        let value = 0x23;
 
         // Program does the following:
         // - load value into register A / accumulator
         // - store value of register A in 16-bit address given by `addr_lo` and `addr_hi`
         // - break
+        let lda_opcode = 0xA9;
+        let sta_abs_addr_mode_opcode = 0x8D;
+        let addr_lo = 0x00;
+        let addr_hi = 0x01;
+        let value = 0x23;
         let program = vec![
             lda_opcode,
             value,
@@ -1057,7 +1058,10 @@ mod tests {
             addr_hi,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let stored_16bit_addr = u16::from_le_bytes([addr_lo, addr_hi]);
         assert_eq!(ram[stored_16bit_addr as usize], value);
     }
@@ -1072,17 +1076,14 @@ mod tests {
         // Write `value` into `zero_page_addr + offset` in the `ram` array
         ram[(zero_page_addr + offset) as usize] = value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let stx_zero_page_y_addr_mode_opcode = 0x96;
-
         // Program does the following:
         // - store offset in register Y
         // - load value into register X
         // - store contents of register X in `zero_page_addr` offset by the value in register Y
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let stx_zero_page_y_addr_mode_opcode = 0x96;
         let program = vec![
             ldy_immediate_addr_mode_opcode,
             offset,
@@ -1092,8 +1093,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
 
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         let stored_value = ram[(zero_page_addr + offset) as usize];
         assert_eq!(stored_value, value);
     }
@@ -1105,15 +1108,12 @@ mod tests {
         let hi = 0x01;
         let value = 0x23;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_opcode = 0xA0;
-        let sty_absolute_addr_mode_opcode = 0x8C;
-
         // Program does the following:
         // - load value into register Y
         // - store contents of register Y in 16-bit address denoted by `lo` and `hi`
         // - break
+        let ldy_immediate_addr_opcode = 0xA0;
+        let sty_absolute_addr_mode_opcode = 0x8C;
         let program = vec![
             ldy_immediate_addr_opcode,
             value,
@@ -1122,7 +1122,10 @@ mod tests {
             hi,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let stored_value = ram[u16::from_le_bytes([lo, hi]) as usize];
         assert_eq!(stored_value, value);
     }
@@ -1136,15 +1139,15 @@ mod tests {
         // Write `value` into `zero_page_addr` in the `ram` array
         ram[zero_page_addr as usize] = value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_zero_page_addr_mode_opcode = 0xA6;
-
         // Program does the following:
         // - load contents of `zero_page_addr` into register X
         // - break
+        let ldx_zero_page_addr_mode_opcode = 0xA6;
         let program = vec![ldx_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.register_x, value);
     }
 
@@ -1158,15 +1161,12 @@ mod tests {
         // Write `value` into `zero_page_addr + offset` in the `ram` array
         ram[(zero_page_addr + offset) as usize] = value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let ldy_zero_page_x_addr_mode_opcode = 0xB4;
-
         // Program does the following:
         // - store offset in register X
         // - load contents of `zero_page_addr + offset` into register Y
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let ldy_zero_page_x_addr_mode_opcode = 0xB4;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             offset,
@@ -1174,7 +1174,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.register_y, value);
     }
 
@@ -1191,18 +1194,15 @@ mod tests {
         let addr_16bit = u16::from_le_bytes([lo, hi]) + offset as u16;
         ram[addr_16bit as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let and_abs_x_addr_mode_opcode = 0x3D;
-
         // Program does the following:
         // - load value into register A
         // - load offset into register X
         // - perform bitwise AND between bits in register A and value in memory, and store result
         // in register A
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let and_abs_x_addr_mode_opcode = 0x3D;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -1213,7 +1213,10 @@ mod tests {
             hi,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.register_a, register_a_value & memory_value);
     }
 
@@ -1235,17 +1238,14 @@ mod tests {
         // Write value to target address
         ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let cmp_indirect_x_addr_mode_opcode = 0xC1;
-
         // Program does the following:
         // - load value into register A
         // - load offset into register X
         // - compare value in register A to value in memory
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cmp_indirect_x_addr_mode_opcode = 0xC1;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -1255,7 +1255,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -1265,15 +1268,13 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_x_value = 20u8;
         let memory_value = 15u8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let cpx_immediate_addr_mode_opcode = 0xE0;
 
         // Program does the following:
         // - load value into register X
         // - execute CPX instruction
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cpx_immediate_addr_mode_opcode = 0xE0;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
@@ -1281,7 +1282,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -1291,15 +1295,13 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x7F;
         let memory_value = 0x80;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let cpx_immediate_addr_mode_opcode = 0xE0;
 
         // Program does the following:
         // - load value into register X
         // - execute CPX instruction
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let cpx_immediate_addr_mode_opcode = 0xE0;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
@@ -1307,7 +1309,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -1317,15 +1322,13 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_y_value = 20u8;
         let memory_value = 15u8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let cpy_immediate_addr_mode_opcode = 0xC0;
 
         // Program does the following:
         // - load value into register Y
         // - execute CPY instruction
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let cpy_immediate_addr_mode_opcode = 0xC0;
         let program = vec![
             ldy_immediate_addr_mode_opcode,
             register_y_value,
@@ -1333,7 +1336,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -1343,15 +1349,13 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x7F;
         let memory_value = 0x80;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let cpy_immediate_addr_mode_opcode = 0xC0;
 
         // Program does the following:
         // - load value into register Y
         // - execute CPY instruction
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let cpy_immediate_addr_mode_opcode = 0xC0;
         let program = vec![
             ldy_immediate_addr_mode_opcode,
             register_y_value,
@@ -1359,7 +1363,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -1386,17 +1393,14 @@ mod tests {
         // + offset`, most significant byte given by `hi`)
         ram[u16::from_le_bytes([lo + lo_offset, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let eor_indirect_y_addr_mode_opcode = 0x51;
-
         // Program does the following:
         // - load value into register A
         // - load least significant byte offset into register Y
         // - perform XOR between value in register A and memory value
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let eor_indirect_y_addr_mode_opcode = 0x51;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -1406,7 +1410,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -1424,17 +1431,14 @@ mod tests {
         // by `lo` and `hi`
         ram[(u16::from_le_bytes([lo, hi]) + offset as u16) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addressing_opcode = 0xA9;
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let ora_absolute_y_addr_mode_opcode = 0x19;
-
         // Program does the following:
         // - load value into register A
         // - load offset into register Y
         // - perform OR between value in register A and memory value
         // - break
+        let lda_immediate_addressing_opcode = 0xA9;
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let ora_absolute_y_addr_mode_opcode = 0x19;
         let program = vec![
             lda_immediate_addressing_opcode,
             register_a_value,
@@ -1445,7 +1449,10 @@ mod tests {
             hi,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -1455,15 +1462,16 @@ mod tests {
         let mut ram = [0x00; 2048];
         let lo = 0x1F;
         let hi = 0x25;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let jmp_indirect_addr_mode_opcode = 0x6C;
 
         // Program does the following:
         // - jump to 16-bit address given by `lo` and `hi`
         // - break
+        let jmp_indirect_addr_mode_opcode = 0x6C;
         let program = vec![jmp_indirect_addr_mode_opcode, lo, hi, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.program_counter, u16::from_le_bytes([lo, hi]));
     }
 
@@ -1473,15 +1481,16 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let lo = 0x1F;
         let hi = 0x25;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let jsr_absolute_addr_mode_opcode = 0x20;
 
         // Program does the following:
         // - execute JSR instruction
+        let jsr_absolute_addr_mode_opcode = 0x20;
         let program = vec![jsr_absolute_addr_mode_opcode, lo, hi];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions = program.len();
-        cpu.load_and_run(program);
+        cpu.load_and_run();
 
         // Check the final program counter value
         let target_address = u16::from_le_bytes([lo, hi]);
@@ -1514,22 +1523,23 @@ mod tests {
         ram[subroutine_start_addr as usize] = lda_immediate_addr_mode_opcode;
         ram[(subroutine_start_addr + 1) as usize] = register_a_value;
         ram[(subroutine_start_addr + 2) as usize] = rts_opcode;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let jsr_absolute_addr_mode_opcode = 0x20;
 
         // Program does the follow:
         // - jump to address given by `subroutine_start_addr_lo` and `subroutine_start_addr_hi`
         // - load value into register A
         // - exeucte RTS instruction
         // - break
+        let jsr_absolute_addr_mode_opcode = 0x20;
         let program = vec![
             jsr_absolute_addr_mode_opcode,
             subroutine_start_addr_lo,
             subroutine_start_addr_hi,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_a_value, cpu.register_a);
     }
 
@@ -1540,15 +1550,15 @@ mod tests {
         let value = 0x05;
         ram[zero_page_addr as usize] = value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let dec_zero_page_addr_mode_opcode = 0xC6;
-
         // Program does the following:
         // - decrement value in memory address
         // - break
+        let dec_zero_page_addr_mode_opcode = 0xC6;
         let program = vec![dec_zero_page_addr_mode_opcode, zero_page_addr];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!((value as i8) - 1, ram[zero_page_addr as usize] as i8);
     }
 
@@ -1556,22 +1566,23 @@ mod tests {
     fn dex_decrements_register_x_value() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x10;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let dex_opcode = 0xCA;
 
         // Program does the following:
         // - load value into register X
         // - execute DEX instruction
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let dex_opcode = 0xCA;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
             dex_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_x_value - 1, cpu.register_x);
     }
 
@@ -1579,22 +1590,23 @@ mod tests {
     fn dey_decrements_register_y_value() {
         let mut ram = [0x00; 2048];
         let register_y_value = 0x10;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let dey_opcode = 0x88;
 
         // Program does the following:
         // - load value into register Y
         // - executes DEY instruction
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let dey_opcode = 0x88;
         let program = vec![
             ldy_immediate_addr_mode_opcode,
             register_y_value,
             dey_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_y_value - 1, cpu.register_y);
     }
 
@@ -1602,22 +1614,23 @@ mod tests {
     fn txs_transfers_register_x_value_to_stack_register() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0x04;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let txs_opcode = 0x9A;
 
         // Program does the following:
         // - load value in register X
         // - transfer value from register X to stack register
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
             txs_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.stack_register, register_x_value);
     }
 
@@ -1625,21 +1638,22 @@ mod tests {
     fn pha_pushes_register_a_value_onto_stack() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x06;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addressing_opcode = 0xA9;
-        let pha_opcode = 0x048;
 
         // Program does the following:
         // - load value into register A
         // - push value in register A onto stack
         // - break
+        let lda_immediate_addressing_opcode = 0xA9;
+        let pha_opcode = 0x048;
         let program = vec![
             lda_immediate_addressing_opcode,
             register_a_value,
             pha_opcode,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let stack_address_containing_value =
             u16::from_le_bytes([cpu.stack_register + 1, STACK_REGISTER_HI]);
         assert_eq!(
@@ -1651,15 +1665,16 @@ mod tests {
     #[test]
     fn tsx_transfers_stack_register_value_to_register_x() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let tsx_opcode = 0xBA;
 
         // Program does the following:
         // - copy vlaue in stack register to register X
         // - break
+        let tsx_opcode = 0xBA;
         let program = vec![tsx_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(cpu.register_x, STACK_REGISTER_LO_START);
     }
 
@@ -1670,15 +1685,15 @@ mod tests {
         let memory_value = 0b0100_1000;
         ram[zero_page_addr as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bit_zero_page_addr_mode_opcode = 0x24;
-
         // Program does the following:
         // - perform BIT instruction with value in address `zero_page_addr`
         // - break
+        let bit_zero_page_addr_mode_opcode = 0x24;
         let program = vec![bit_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, true);
     }
@@ -1693,16 +1708,13 @@ mod tests {
         ram[zero_page_addr_set as usize] = memory_value_set;
         ram[zero_page_addr_clear as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bit_zero_page_addr_mode_opcode = 0x24;
-
         // Program does the following:
         // - perform BIT instruction with value in address `zero_page_addr_set` (should set the
         // overflow flag)
         // - perform BIT instruction with value in address `zero_page_addr_clear` (should clear the
         // overflow flag)
         // - break
+        let bit_zero_page_addr_mode_opcode = 0x24;
         let program = vec![
             bit_zero_page_addr_mode_opcode,
             zero_page_addr_set,
@@ -1710,7 +1722,10 @@ mod tests {
             zero_page_addr_clear,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(is_overflow_flag_set, false);
     }
@@ -1723,15 +1738,15 @@ mod tests {
         let memory_value = 0b1000_0000;
         ram[u16::from_le_bytes([lo, hi]) as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bit_absolute_addr_mode_opcode = 0x2C;
-
         // Program does the following:
         // - perform BIT instruction with value in 16-bit address given by `lo` and `hi`
         // - break
+        let bit_absolute_addr_mode_opcode = 0x2C;
         let program = vec![bit_absolute_addr_mode_opcode, lo, hi, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -1748,16 +1763,13 @@ mod tests {
         ram[u16::from_le_bytes([lo_set, hi_set]) as usize] = memory_value_set;
         ram[u16::from_le_bytes([lo_clear, hi_clear]) as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bit_absolute_addr_mode_opcode = 0x2C;
-
         // Program does the following:
         // - perform BIT instruction with value in 16-bit address given by `lo_set` and `hi_set`
         // (should set negative flag)
         // - perform BIT instruction with value in 16-bit address given by `lo_clear` and
         // `hi_clear` (should clear negative flag)
         // - break
+        let bit_absolute_addr_mode_opcode = 0x2C;
         let program = vec![
             bit_absolute_addr_mode_opcode,
             lo_set,
@@ -1767,7 +1779,10 @@ mod tests {
             hi_clear,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
     }
@@ -1780,15 +1795,12 @@ mod tests {
         let register_a_value = 0b1101_1011;
         ram[zero_page_addr as usize] = memory_value;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let bit_zero_page_addr_mode_opcode = 0x24;
-
         // Program does the following:
         // - load value into register A
         // - perform BIT instruction with value in address `zero_page_addr`
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let bit_zero_page_addr_mode_opcode = 0x24;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -1796,7 +1808,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -1812,11 +1827,6 @@ mod tests {
         ram[zero_page_addr_set as usize] = memory_value_set;
         ram[zero_page_addr_clear as usize] = memory_value_clear;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let bit_zero_page_addr_mode_opcode = 0x24;
-
         // Program does the following:
         // - load value into register A
         // - perform BIT instruction with value in address `zero_page_addr_set` (should set zero
@@ -1824,6 +1834,8 @@ mod tests {
         // - perform BIT instruction with value in address `zero_page_addr_clear` (should clear
         // zero flag)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let bit_zero_page_addr_mode_opcode = 0x24;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -1833,7 +1845,10 @@ mod tests {
             zero_page_addr_clear,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, false);
     }
@@ -1844,38 +1859,38 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let beq_opcode = 0xF0;
-
         // Program does the following:
         // - load zero value into register A (so then the zero flag is set)
         // - perform BEQ instruction (which does non-trivial action if the zero flag is set)
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let beq_opcode = 0xF0;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             0x00,
             beq_opcode,
             offset as u8,
         ];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_is_read = 3;
         let increment_after_reading_beq_instruction = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_is_read
             + offset as i32
             + increment_after_reading_beq_instruction;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
     #[test]
     fn sec_sets_carry_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let sec_opcode = 0x38;
         let program = vec![sec_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -1883,17 +1898,18 @@ mod tests {
     #[test]
     fn clc_clears_carry_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let clc_opcode = 0x18;
 
         // Prorgam does the following:
         // - set the carry flag (to be able to verify that the carry flag has been cleared)
         // - clear the carry flag
         // - break
+        let sec_opcode = 0x38;
+        let clc_opcode = 0x18;
         let program = vec![sec_opcode, clc_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
@@ -1904,22 +1920,22 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let bcs_opcode = 0xB0;
-
         // Program does the following:
         // - set carry flag
         // - execute BCS instruction (which does non-trivial action if carry flag is set)
+        let sec_opcode = 0x38;
+        let bcs_opcode = 0xB0;
         let program = vec![sec_opcode, bcs_opcode, offset as u8];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_is_read = 2;
         let increment_after_reading_bcs_instruction = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_is_read
             + offset as i32
             + increment_after_reading_bcs_instruction;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
@@ -1928,20 +1944,21 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bcc_opcode = 0x90;
 
         // Program does the following:
         // - execute BCC instruction (which does non-trivial action if carry flag is clear)
+        let bcc_opcode = 0x90;
         let program = vec![bcc_opcode, offset as u8];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_is_read = 1;
         let increment_after_reading_bcc_instruction = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_is_read
             + offset as i32
             + increment_after_reading_bcc_instruction;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
@@ -1952,27 +1969,27 @@ mod tests {
         let offset = -6i8;
         let register_a_value = -3i8;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let bmi_opcode = 0x30;
-
         // Program does the following:
         // - load negative value into register A (to set the negative flag)
         // - execute BMI instruction (which does non-trivial action if negative flag is set)
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let bmi_opcode = 0x30;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value as u8,
             bmi_opcode,
             offset as u8,
         ];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_is_read = 3;
         let increment_after_reading_bmi_instruction = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_is_read
             + offset as i32
             + increment_after_reading_bmi_instruction;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
@@ -1982,20 +1999,20 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bpl_opcode = 0x10;
-
         // Program does the following:
         // - execute BPL instruction (which does non-trivial action if negative flag is clear)
+        let bpl_opcode = 0x10;
         let program = vec![bpl_opcode, offset as u8];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_value = 1;
         let increment_reading_next_opcode_after_offsetting = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_value
             + offset as i32
             + increment_reading_next_opcode_after_offsetting;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
@@ -2005,20 +2022,20 @@ mod tests {
         let program_counter_start: u16 = 0x8000;
         let offset = -6i8;
 
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bne_opcode = 0xD0;
-
         // Program does the following:
         // - execute BNE instruction (which does non-trivial action if zero flag is clear)
+        let bne_opcode = 0xD0;
         let program = vec![bne_opcode, offset as u8];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions_before_offset_value = 1;
         let increment_reading_next_opcode_after_offsetting = 1;
         let expected_program_counter_value = program_counter_start as i32
             + no_of_instructions_before_offset_value
             + offset as i32
             + increment_reading_next_opcode_after_offsetting;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(expected_program_counter_value as u16, cpu.program_counter);
     }
 
@@ -2028,23 +2045,24 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let rol_zero_page_addr_mode_opcode = 0x26;
 
         // Program does the following:
         // - set carry flag
         // - execute ROL instruction on value in zero page addr (which should take into account the
         // carry flag being set)
         // - break
+        let sec_opcode = 0x38;
+        let rol_zero_page_addr_mode_opcode = 0x26;
         let program = vec![
             sec_opcode,
             rol_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!((memory_value << 1) + 1, ram[zero_page_addr as usize]);
     }
 
@@ -2054,15 +2072,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let rol_zero_page_addr_mode_opcode = 0x26;
 
         // Program does the following:
         // - execute ROL instruction on value in zero page addr
         // - break
+        let rol_zero_page_addr_mode_opcode = 0x26;
         let program = vec![rol_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -2073,15 +2092,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // bit 7 is set on original value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let rol_zero_page_addr_mode_opcode = 0x26;
 
         // Program does the following:
         // - execute ROL instruction on value in zero page addr
         // - break
+        let rol_zero_page_addr_mode_opcode = 0x26;
         let program = vec![rol_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -2092,22 +2112,23 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let rol_zero_page_addr_mode_opcode = 0x26;
 
         // Program does the following:
         // - set carry flag
         // - execute ROL instruction on value in zero page addr (should clear carry flag)
         // - break
+        let sec_opcode = 0x38;
+        let rol_zero_page_addr_mode_opcode = 0x26;
         let program = vec![
             sec_opcode,
             rol_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
@@ -2118,15 +2139,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let rol_zero_page_addr_mode_opcode = 0x26;
 
         // Program does the following:
         // - execute ROL instruction on value in zero page addr (should set negative flag)
         // - break
+        let rol_zero_page_addr_mode_opcode = 0x26;
         let program = vec![rol_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -2137,15 +2159,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let asl_zero_page_addr_mode_opcode = 0x06;
 
         // Program does the following:
         // - execute ASL instruction on value in zero page addr
         // - break
+        let asl_zero_page_addr_mode_opcode = 0x06;
         let program = vec![asl_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(memory_value << 1, ram[zero_page_addr as usize]);
     }
 
@@ -2155,15 +2178,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let asl_zero_page_addr_mode_opcode = 0x06;
 
         // Program does the following:
         // - execute ASL instruction on value in zero page addr
         // - break
+        let asl_zero_page_addr_mode_opcode = 0x06;
         let program = vec![asl_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -2177,15 +2201,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b1000_0000; // arithmetic left shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let asl_zero_page_addr_mode_opcode = 0x06;
 
         // Program does the following:
         // - execute ASL instruction on value in zero page addr
         // - break
+        let asl_zero_page_addr_mode_opcode = 0x06;
         let program = vec![asl_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -2196,22 +2221,23 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let asl_zero_page_addr_mode_opcode = 0x06;
 
         // Program does the following:
         // - set carry flag
         // - execute ASL instruction on value in zero page addr (should clear carry flag)
         // - break
+        let sec_opcode = 0x38;
+        let asl_zero_page_addr_mode_opcode = 0x06;
         let program = vec![
             sec_opcode,
             asl_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
@@ -2222,15 +2248,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0100_0000; // arithmetic left shift would set bit 7
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let asl_zero_page_addr_mode_opcode = 0x06;
 
         // Program does the following:
         // - execute ASL instruction on value in zero page addr (should set negative flag)
         // - break
+        let asl_zero_page_addr_mode_opcode = 0x06;
         let program = vec![asl_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, true);
     }
@@ -2241,15 +2268,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lsr_zero_page_addr_mode_opcode = 0x46;
 
         // Program does the following:
         // - execute LSR instruction on value in zero page addr
         // - break
+        let lsr_zero_page_addr_mode_opcode = 0x46;
         let program = vec![lsr_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(memory_value >> 1, ram[zero_page_addr as usize]);
     }
 
@@ -2259,15 +2287,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // logical right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lsr_zero_page_addr_mode_opcode = 0x46;
 
         // Program does the following:
         // - execute LSR instruction on value in zero page addr
         // - break
+        let lsr_zero_page_addr_mode_opcode = 0x46;
         let program = vec![lsr_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -2278,15 +2307,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lsr_zero_page_addr_mode_opcode = 0x46;
 
         // Program does the following:
         // - execute LSR instruction on value in zero page addr
         // - break
+        let lsr_zero_page_addr_mode_opcode = 0x46;
         let program = vec![lsr_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -2297,22 +2327,23 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let lsr_zero_page_addr_mode_opcode = 0x46;
 
         // Program does the following:
         // - set carry flag
         // - execute LSR instruction on value in zero page addr (should clear carry flag)
         // - break
+        let sec_opcode = 0x38;
+        let lsr_zero_page_addr_mode_opcode = 0x46;
         let program = vec![
             sec_opcode,
             lsr_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
@@ -2324,15 +2355,13 @@ mod tests {
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let lsr_zero_page_addr_mode_opcode = 0x46;
 
         // Program does the following:
         // - load value into register A (should set negative flag)
         // - execute LSR instruction on value in zero page addr (should clear negative flag)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let lsr_zero_page_addr_mode_opcode = 0x46;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2340,7 +2369,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
     }
@@ -2351,15 +2383,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - execute ROL instruction on value in zero page addr
         // - break
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![ror_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(memory_value >> 1, ram[zero_page_addr as usize]);
     }
 
@@ -2369,23 +2402,24 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_1000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - set carry flag
         // - execute ROL instruction on value in zero page addr (which should take into account the
         // carry flag being set)
         // - break
+        let sec_opcode = 0x38;
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![
             sec_opcode,
             ror_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(0b1000_0100, ram[zero_page_addr as usize]);
     }
 
@@ -2395,15 +2429,16 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // right shift produces zero value
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - execute ROR instruction
         // - break
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![ror_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_zero_flag_set = cpu.status & 0b000_0010 == 0b0000_0010;
         assert_eq!(is_zero_flag_set, true);
     }
@@ -2413,16 +2448,17 @@ mod tests {
         let mut ram = [0x00; 2048];
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0001; // bit 0 is set on original value
-        ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - execute ROR instruction on value in zero page addr
         // - break
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![ror_zero_page_addr_mode_opcode, zero_page_addr, 0x00];
-        cpu.load_and_run(program);
+        ram[zero_page_addr as usize] = memory_value;
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, true);
     }
@@ -2433,22 +2469,23 @@ mod tests {
         let zero_page_addr = 0x15;
         let memory_value = 0b0000_0010;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let sec_opcode = 0x38;
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - set carry flag
         // - execute ROR instruction on value in zero page addr (should clear carry flag)
         // - break
+        let sec_opcode = 0x38;
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![
             sec_opcode,
             ror_zero_page_addr_mode_opcode,
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(is_carry_flag_set, false);
     }
@@ -2460,15 +2497,13 @@ mod tests {
         let register_a_value = 0b1000_0000;
         let memory_value = 0b0100_0000;
         ram[zero_page_addr as usize] = memory_value;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let ror_zero_page_addr_mode_opcode = 0x66;
 
         // Program does the following:
         // - load value into register A (should set negative flag)
         // - execute ROR instruction on value in zero page addr (should clear negative flag)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let ror_zero_page_addr_mode_opcode = 0x66;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2476,7 +2511,10 @@ mod tests {
             zero_page_addr,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
         assert_eq!(is_negative_flag_set, false);
     }
@@ -2485,17 +2523,15 @@ mod tests {
     fn php_pushes_status_flags_onto_stack() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1000_0000;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let php_opcode = 0x08;
 
         // Program does the following:
         // - load value into register A (should set negative flag)
         // - set carry flag
         // - execute PHP instruction
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let php_opcode = 0x08;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2503,7 +2539,10 @@ mod tests {
             php_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
         let stack_address_containing_value =
             u16::from_le_bytes([cpu.stack_register + 1, STACK_REGISTER_HI]);
@@ -2517,12 +2556,6 @@ mod tests {
     fn pla_sets_register_a_correctly() {
         let mut ram = [0x00; 2048];
         let register_x_value = 0b1000_0000;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let sec_opcode = 0x38;
-        let php_opcode = 0x08;
-        let pla_opcode = 0x68;
 
         // Program does the following:
         // - load value into register X (should set negative flag)
@@ -2530,6 +2563,10 @@ mod tests {
         // - put status flag values into stack register
         // - execute PLA instruction
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let sec_opcode = 0x38;
+        let php_opcode = 0x08;
+        let pla_opcode = 0x68;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
@@ -2538,7 +2575,10 @@ mod tests {
             pla_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let expected_status = 0b1010_0001; // negative flag + bit 5 + carry flag
         assert_eq!(expected_status, cpu.register_a);
     }
@@ -2547,23 +2587,24 @@ mod tests {
     fn plp_sets_status_flags_correctly() {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0101;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let pha_opcode = 0x48;
-        let plp_opcode = 0x28;
 
         // Program does the following:
         // - load value into register A
         // - put value in register A into stack register
         // - execute PLP instruction
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let pha_opcode = 0x48;
+        let plp_opcode = 0x28;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
             pha_opcode,
             plp_opcode,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let expected_status = register_a_value | 0b0001_0000; // expecting bit 5 to be set too
         assert_eq!(expected_status, cpu.status);
     }
@@ -2573,15 +2614,13 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
 
         // Program does the following:
         // - load value into register A
         // - execute ADC instruction with value given
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2589,7 +2628,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_a_value + memory_value, cpu.register_a);
     }
 
@@ -2598,17 +2640,15 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0x20;
         let memory_value = 0x16;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let adc_immediate_addr_mode_opcode = 0x69;
 
         // Program does the following:
         // - load value into register A
         // - set carry flag
         // - execute ADC instruction with value given
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let adc_immediate_addr_mode_opcode = 0x69;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2617,7 +2657,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_a_value + memory_value + 1, cpu.register_a);
     }
 
@@ -2626,10 +2669,6 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
 
         // Program does the following:
         // - load value into register A
@@ -2637,6 +2676,8 @@ mod tests {
         // produce an 8-bit value whose sign bit is set, and thus has the wrong sign for adding two
         // positive numbers)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2644,7 +2685,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Overflow `i8` at the top boundary and wrap around to a negative value
         let expected_result = 0b1000_0000;
         assert_eq!(expected_result, cpu.register_a);
@@ -2657,10 +2701,6 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
 
         // Program does the following:
         // - load value into register A
@@ -2668,6 +2708,8 @@ mod tests {
         // produce an 8-bit value whose sign bit is clear, and thus has the wrong sign for adding two
         // negative numbers)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2675,7 +2717,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Overflow `i8` at the bottom boundary and wrap around to a positive value
         let expected_result = 0b0111_1111;
         assert_eq!(expected_result, cpu.register_a);
@@ -2688,16 +2733,14 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 127u8;
         let memory_value = 129u8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
 
         // Program does the following:
         // - load value into register A
         // - execute ADC instruction (adding two values whose unsigned int representation would
         // overflow the range of `u8`)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2705,7 +2748,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Overflow `u8` at the top boundary and lose info in extra bit (should be 256, but appears
         // to be 0 due to info in 8th bit - counting from 0 - being missing from a `u8`)
         let expected_result = 0b0000_0000;
@@ -2719,17 +2765,15 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0010_0000; // 32
         let memory_value = 0b0001_0110; // 22
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let sbc_immediate_addr_mode_opcode = 0xE9;
 
         // Program does the following:
         // - load value into register A
         // - set carry flag
         // - execute SBC instruction with value given
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2738,7 +2782,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(register_a_value - memory_value, cpu.register_a);
     }
 
@@ -2747,11 +2794,6 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b1100_0000; // -64 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let sbc_immediate_addr_mode_opcode = 0xE9;
 
         // Program does the following:
         // - load value into register A
@@ -2759,6 +2801,9 @@ mod tests {
         // produce a larger negative number, but will underflow and wrap around, producing an
         // incorrect positive number)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2767,7 +2812,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Underflow `i8` and wrap around to a positive value
         let expected_result = 0b0111_1111;
         assert_eq!(expected_result as i8, cpu.register_a as i8);
@@ -2780,11 +2828,6 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b1011_1111; // -65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let sbc_immediate_addr_mode_opcode = 0xE9;
 
         // Program does the following:
         // - load value into register A
@@ -2792,6 +2835,9 @@ mod tests {
         // produce a larger positive number, but will oveflow and wrap around, producing an
         // incorrect negative number)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2800,7 +2846,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Overflow `i8` and wrap around to a negative value
         let expected_result = 0b1000_0000;
         assert_eq!(expected_result as i8, cpu.register_a as i8);
@@ -2813,11 +2862,6 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 63u8;
         let memory_value = 64u8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let sec_opcode = 0x38;
-        let sbc_immediate_addr_mode_opcode = 0xE9;
 
         // Program does the following:
         // - load value into register A
@@ -2825,6 +2869,9 @@ mod tests {
         // - execute SBC instruction (subtracting a positive number from a smaller positive number
         // would underflow the range of `u8`)
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let sec_opcode = 0x38;
+        let sbc_immediate_addr_mode_opcode = 0xE9;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2833,7 +2880,10 @@ mod tests {
             memory_value,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         // Underflow `u8` and wrap around to the top of `u8` range
         let expected_result = 0b1111_1111;
         assert_eq!(expected_result, cpu.register_a);
@@ -2845,17 +2895,18 @@ mod tests {
     fn txa_sets_register_a_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x13;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let txa_opcode = 0x8A;
 
         // Program does the following:
         // - load value into register X
         // - execute TXA instruction
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txa_opcode = 0x8A;
         let program = vec![ldx_immediate_addr_mode_opcode, value, txa_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(value, cpu.register_a);
     }
 
@@ -2863,17 +2914,18 @@ mod tests {
     fn tya_sets_register_a_value_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x4A;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldy_immediate_addr_mode_opcode = 0xA0;
-        let tya_opcode = 0x98;
 
         // Program does the following:
         // - load value into register Y
         // - execute TYA instruction
         // - break
+        let ldy_immediate_addr_mode_opcode = 0xA0;
+        let tya_opcode = 0x98;
         let program = vec![ldy_immediate_addr_mode_opcode, value, tya_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(value, cpu.register_a);
     }
 
@@ -2881,17 +2933,18 @@ mod tests {
     fn tay_sets_register_y_value_correctly() {
         let mut ram = [0x00; 2048];
         let value = 0x6B;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let tay_opcode = 0xA8;
 
         // Program does the following:
         // - load value into register A
         // - execute TAY instruction
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let tay_opcode = 0xA8;
         let program = vec![lda_immediate_addr_mode_opcode, value, tay_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(value, cpu.register_y);
     }
 
@@ -2902,11 +2955,6 @@ mod tests {
         let offset = 0x10;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
-        let bvc_opcode = 0x50;
 
         // Program does the following:
         // - load value into register A
@@ -2914,6 +2962,9 @@ mod tests {
         // operates)
         // - execute BVC instruction
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+        let bvc_opcode = 0x50;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -2923,8 +2974,11 @@ mod tests {
             offset,
             0x00,
         ];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions = program.len() as u16;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(
             program_counter_start + no_of_instructions,
             cpu.program_counter
@@ -2936,14 +2990,15 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bvc_opcode = 0x50;
 
         // Program does the following:
         // - execute BVC instruction
+        let bvc_opcode = 0x50;
         let program = vec![bvc_opcode, offset as u8];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
 
         let no_of_instructions_before_offset_value = 1;
         let increment_reading_next_opcode_after_offsetting = 1;
@@ -2959,16 +3014,17 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let offset = -16i8;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let bvs_opcode = 0x70;
 
         // Program does the following:
         // - execute BVS instruction
         // - break
+        let bvs_opcode = 0x70;
         let program = vec![bvs_opcode, offset as u8, 0x00];
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
         let no_of_instructions = program.len() as u16;
-        cpu.load_and_run(program);
+        cpu.load_and_run();
         assert_eq!(
             program_counter_start + no_of_instructions,
             cpu.program_counter
@@ -2982,11 +3038,6 @@ mod tests {
         let offset = -16i8;
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
-        let bvs_opcode = 0x70;
 
         // Program does the following:
         // - load value into register A
@@ -2994,6 +3045,9 @@ mod tests {
         // operates)
         // - execute BVS instruction
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+        let bvs_opcode = 0x70;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -3003,7 +3057,10 @@ mod tests {
             offset as u8,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
 
         let no_of_instructions_before_offset_value = 5;
         let increment_reading_next_opcode_after_offsetting = 1;
@@ -3019,17 +3076,15 @@ mod tests {
         let mut ram = [0x00; 2048];
         let register_a_value = 0b0011_1111; // 63 in two's complement representation
         let memory_value = 0b0100_0001; // 65 in two's complement representation
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let lda_immediate_addr_mode_opcode = 0xA9;
-        let adc_immediate_addr_mode_opcode = 0x69;
-        let clv_opcode = 0xB8;
 
         // Program does the following:
         // - load value into register A
         // - perform addition that sets overflow flag
         // - execute CLV instruction
         // - break
+        let lda_immediate_addr_mode_opcode = 0xA9;
+        let adc_immediate_addr_mode_opcode = 0x69;
+        let clv_opcode = 0xB8;
         let program = vec![
             lda_immediate_addr_mode_opcode,
             register_a_value,
@@ -3038,7 +3093,10 @@ mod tests {
             clv_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_overflow_flag_set = cpu.status & 0b0100_0000 == 0b0100_0000;
         assert_eq!(false, is_overflow_flag_set);
     }
@@ -3046,15 +3104,16 @@ mod tests {
     #[test]
     fn nop_doesnt_affect_registers_or_flags() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let nop_opcode = 0xEA;
 
         // Program does the following:
         // - execute the NOP instruction
         // - break
+        let nop_opcode = 0xEA;
         let program = vec![nop_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
 
         let program_counter_start: u16 = 0x8000;
         assert_eq!(cpu.program_counter, program_counter_start + 2);
@@ -3080,11 +3139,6 @@ mod tests {
         let status_flags_stack_addr =
             u16::from_le_bytes([STACK_REGISTER_LO_START - 2, STACK_REGISTER_HI]);
         ram[status_flags_stack_addr as usize] = status_flags;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let txs_opcode = 0x9A;
-        let rti_opcode = 0x40;
 
         // Program does the following:
         // - load value into register X
@@ -3093,6 +3147,9 @@ mod tests {
         // stack will have a non-zero value in it, and the stack pointer will be decremented
         // accordingly)
         // - break
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
+        let rti_opcode = 0x40;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
@@ -3100,7 +3157,10 @@ mod tests {
             rti_opcode,
             0x00,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         let is_carry_flag_set = cpu.status & 0b0000_0001 == 0b0000_0001;
         assert_eq!(true, is_carry_flag_set);
         let is_negative_flag_set = cpu.status & 0b1000_0000 == 0b1000_0000;
@@ -3119,11 +3179,6 @@ mod tests {
             new_program_counter_hi;
         ram[(u16::from_le_bytes([STACK_REGISTER_LO_START - 1, STACK_REGISTER_HI])) as usize] =
             new_program_counter_lo;
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
-        let ldx_immediate_addr_mode_opcode = 0xA2;
-        let txs_opcode = 0x9A;
-        let rti_opcode = 0x40;
 
         // Program does the following:
         // - load value into register X
@@ -3131,24 +3186,30 @@ mod tests {
         // - execute RTI instruction (prior to this instruction being executed, the penultimate two
         // bytes of the stack will have non-zero values in them, and the stack pointer will be
         // decremented accordingly)
+        let ldx_immediate_addr_mode_opcode = 0xA2;
+        let txs_opcode = 0x9A;
+        let rti_opcode = 0x40;
         let program = vec![
             ldx_immediate_addr_mode_opcode,
             register_x_value,
             txs_opcode,
             rti_opcode,
         ];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+
+        cpu.load_and_run();
         assert_eq!(new_program_counter + 1, cpu.program_counter);
     }
 
     #[test]
     fn sed_sets_decimal_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
         let program = vec![sed_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_decimal_flag_set = cpu.status & 0b0000_1000 == 0b0000_1000;
         assert_eq!(true, is_decimal_flag_set);
     }
@@ -3156,12 +3217,12 @@ mod tests {
     #[test]
     fn cld_clears_decimal_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let sed_opcode = 0xF8;
         let cld_opcode = 0xD8;
         let program = vec![sed_opcode, cld_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_decimal_flag_set = cpu.status & 0b0000_1000 == 0b0000_1000;
         assert_eq!(false, is_decimal_flag_set);
     }
@@ -3169,11 +3230,11 @@ mod tests {
     #[test]
     fn sei_sets_interrupt_disable_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
         let program = vec![sei_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_interrupt_disable_flag_set = cpu.status & 0b0000_0100 == 0b0000_0100;
         assert_eq!(true, is_interrupt_disable_flag_set);
     }
@@ -3181,12 +3242,12 @@ mod tests {
     #[test]
     fn cli_clears_interrupt_disable_flag() {
         let mut ram = [0x00; 2048];
-        let bus = Bus::new(&mut ram, create_rom());
-        let mut cpu = CPU::new(bus);
         let sei_opcode = 0x78;
         let cli_opcode = 0x58;
         let program = vec![sei_opcode, cli_opcode, 0x00];
-        cpu.load_and_run(program);
+        let bus = Bus::new(&mut ram, create_rom(&program[..]));
+        let mut cpu = CPU::new(bus);
+        cpu.load_and_run();
         let is_interrupt_disable_flag_set = cpu.status & 0b0000_0100 == 0b0000_0100;
         assert_eq!(false, is_interrupt_disable_flag_set);
     }
