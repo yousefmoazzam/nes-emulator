@@ -55,6 +55,7 @@ impl<'a> Bus<'a> {
                 let mirrored_addr = addr & 0b0000_0111_1111_1111;
                 self.ram[mirrored_addr as usize] = data;
             }
+            ROM_SPACE_START..=ROM_SPACE_END => panic!("ROM space addresses are read-only"),
             _ => todo!(),
         }
     }
@@ -168,5 +169,14 @@ mod tests {
         let mut bus = Bus::new(&mut ram, create_rom());
         bus.mem_write_u16(addr, value);
         assert_eq!(value, bus.mem_read_u16(addr));
+    }
+
+    #[test]
+    #[should_panic(expected = "ROM space addresses are read-only")]
+    fn panic_if_attempt_write_to_rom_space() {
+        let mut ram = [0x00; 2048];
+        let addr_in_rom_space = 0x8000;
+        let mut bus = Bus::new(&mut ram, create_rom());
+        bus.mem_write(addr_in_rom_space, 0x00);
     }
 }
