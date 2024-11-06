@@ -72,7 +72,7 @@ mod tests {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0xFFFF];
+        let program_rom_data = [0x00; 0x8000];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
