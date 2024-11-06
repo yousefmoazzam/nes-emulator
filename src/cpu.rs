@@ -1461,7 +1461,7 @@ mod tests {
     fn jmp_indirect_addressing_updates_program_counter_correctly() {
         let mut ram = [0x00; 2048];
         let lo = 0x1F;
-        let hi = 0x25;
+        let hi = 0x85;
 
         // Program does the following:
         // - jump to 16-bit address given by `lo` and `hi`
@@ -1480,7 +1480,7 @@ mod tests {
         let mut ram = [0x00; 2048];
         let program_counter_start: u16 = 0x8000;
         let lo = 0x1F;
-        let hi = 0x25;
+        let hi = 0x85;
 
         // Program does the following:
         // - execute JSR instruction
