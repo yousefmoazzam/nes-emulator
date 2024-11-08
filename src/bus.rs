@@ -4,6 +4,7 @@ const RAM_SPACE_START: u16 = 0x0000;
 const RAM_MIRRORS_SPACE_END: u16 = 0x1FFF;
 const ROM_SPACE_START: u16 = 0x8000;
 const ROM_SPACE_END: u16 = 0xFFFF;
+const PRG_ROM_PAGE_SIZE: usize = 0x4000;
 
 pub struct Bus<'a> {
     ram: &'a mut [u8],
@@ -16,7 +17,11 @@ impl<'a> Bus<'a> {
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
-        let offsetted_addr = addr - 0x8000;
+        let mut offsetted_addr = addr - 0x8000;
+        if self.rom.prg_rom.len() == PRG_ROM_PAGE_SIZE && offsetted_addr >= PRG_ROM_PAGE_SIZE as u16
+        {
+            offsetted_addr -= PRG_ROM_PAGE_SIZE as u16;
+        }
         self.rom.prg_rom[offsetted_addr as usize]
     }
 
@@ -94,7 +99,7 @@ mod tests {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -178,5 +183,36 @@ mod tests {
         let addr_in_rom_space = 0x8000;
         let mut bus = Bus::new(&mut ram, create_rom());
         bus.mem_write(addr_in_rom_space, 0x00);
+    }
+
+    #[test]
+    fn mem_read_addr_in_top_half_of_rom_space_with_only_16kib_rom_does_mirroring() {
+        const MIRRORED_ADDR: u16 = 0xFFFC;
+        const PRG_ROM_DATA_VALUE: u8 = 0x05;
+        let mut data = ROM_HEADER_MAGIC_STRING.to_vec();
+        let no_of_16kib_rom_banks = 0x1;
+        let no_of_8kib_vrom_banks = 0x1;
+        let control_byte_one = 0b1111_0000;
+        let control_byte_two = 0b1111_0000;
+        let mut bytes_after_magic_string = vec![
+            no_of_16kib_rom_banks,
+            no_of_8kib_vrom_banks,
+            control_byte_one,
+            control_byte_two,
+        ];
+        data.append(&mut bytes_after_magic_string);
+        // TODO: In addition to the reserved six bytes at the end of the header being zero, also
+        // makes the PRG RAM byte and the unknown byte after that, be zero. Find out how to set
+        // these two bytes properly at some point.
+        let reserved_empty_bytes = [0x00; 8];
+        data.append(&mut reserved_empty_bytes.to_vec());
+        let program_rom_data = [PRG_ROM_DATA_VALUE; PRG_ROM_PAGE_SIZE];
+        data.append(&mut program_rom_data.to_vec());
+        let chr_rom_data = [0x02; 0x1FFF];
+        data.append(&mut chr_rom_data.to_vec());
+        let rom = Rom::new(&data[..]);
+        let mut ram = [0x00; 2048];
+        let bus = Bus::new(&mut ram, rom);
+        assert_eq!(bus.mem_read(MIRRORED_ADDR), PRG_ROM_DATA_VALUE);
     }
 }

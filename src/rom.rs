@@ -1,7 +1,7 @@
 static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 static HEADER_SIZE: usize = 16;
 static TRAINER_SECTION_SIZE: usize = 512;
-static PRG_ROM_PAGE_SIZE: usize = 0x8000;
+static PRG_ROM_PAGE_SIZE: usize = 0x4000;
 static CHR_ROM_PAGE_SIZE: usize = 0x1FFF;
 
 #[derive(Debug, PartialEq)]
@@ -78,6 +78,8 @@ impl Rom {
 mod test {
     use super::*;
 
+    const PRG_ROM_PAGE_SIZE: usize = 0x4000;
+
     #[test]
     #[should_panic(
         expected = "Unexpected file format (missing 'NES^Z' string at beginning of header)"
@@ -143,7 +145,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -171,7 +173,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -199,7 +201,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -227,7 +229,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -254,7 +256,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x01; 0x8000];
+        let program_rom_data = [0x01; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -284,7 +286,7 @@ mod test {
         data.append(&mut reserved_empty_bytes.to_vec());
         let trainer_section = [0x00; 512];
         data.append(&mut trainer_section.to_vec());
-        let program_rom_data = [0x01; 0x8000];
+        let program_rom_data = [0x01; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
@@ -312,7 +314,7 @@ mod test {
         // these two bytes properly at some point.
         let reserved_empty_bytes = [0x00; 8];
         data.append(&mut reserved_empty_bytes.to_vec());
-        let program_rom_data = [0x00; 0x8000];
+        let program_rom_data = [0x00; PRG_ROM_PAGE_SIZE];
         data.append(&mut program_rom_data.to_vec());
         let chr_rom_data = [0x02; 0x1FFF];
         data.append(&mut chr_rom_data.to_vec());
