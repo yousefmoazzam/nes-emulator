@@ -830,17 +830,14 @@ impl<'a> CPU<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::rom::Rom;
+    use crate::rom::{Rom, HEADER_MAGIC_STRING};
 
     use super::*;
 
-    // TODO: Duplicate of private binding in `rom.rs`, think about if that should be made public
-    // for being reusable in this test module or not (or do something better)
-    static ROM_HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
     static PRG_ROM_PAGE_SIZE: usize = 0x4000;
 
     fn create_rom(program_data: &[u8]) -> Rom {
-        let mut data = ROM_HEADER_MAGIC_STRING.to_vec();
+        let mut data = HEADER_MAGIC_STRING.to_vec();
         let no_of_16kib_rom_banks = 0x1;
         let no_of_8kib_vrom_banks = 0x1;
         let control_byte_one = 0b1111_0000;

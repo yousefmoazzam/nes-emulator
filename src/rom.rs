@@ -1,4 +1,4 @@
-static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+pub(crate) static HEADER_MAGIC_STRING: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 static HEADER_SIZE: usize = 16;
 static TRAINER_SECTION_SIZE: usize = 512;
 static PRG_ROM_PAGE_SIZE: usize = 0x4000;
